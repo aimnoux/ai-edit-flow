@@ -33,7 +33,7 @@ GAP_IN = 0.25      # pause inside a paragraph
 GAP_PARA = 0.6     # pause between script paragraphs
 PAD_IN, PAD_OUT = 0.06, 0.12
 LONG_GAP = 0.45    # pauses longer than this are shortened
-FILLERS = set(CFG.get("fillers") or ["uh", "um", "er", "erm", "ah", "mm", "hmm", "mhm", "э", "ээ", "эээ", "мм", "эм"])
+FILLERS = set(["uh", "um", "er", "erm", "ah", "mm", "hmm", "mhm"] + list(CFG.get("fillers") or []))   # your language's fillers: style/config.json -> fillers
 
 
 def speech_mask(path, hop=0.02):
