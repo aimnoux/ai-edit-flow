@@ -1,0 +1,22 @@
+{
+  "_": "The person's settings that scripts read. Filled by the `style` and `voice` skills. Keys are optional unless noted.",
+  "language": "en",
+  "voice": {
+    "_": "ElevenLabs voice for engine/voice.py: voice_id from `python3 engine/tts_elevenlabs.py --list-voices` or `--clone`. say: how to pronounce words the model reads badly; the text in the frame stays as written.",
+    "voice_id": "",
+    "model_id": "eleven_v3",
+    "say": {}
+  },
+  "channel": {
+    "_": "Shown in the ending of vertical videos (subscribe / like button). avatar: a path relative to style/, e.g. avatar.png; empty draws the first letter of the name.",
+    "name": "",
+    "handle": "",
+    "avatar": ""
+  },
+  "captions": {
+    "_": "Embedded captions in vertical video: words per line and words a line must not end on (prepositions, articles, conjunctions in your language). Empty weak uses the English defaults.",
+    "max_words": 4,
+    "weak": []
+  },
+  "fps": 25
+}

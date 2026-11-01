@@ -1,0 +1,17 @@
+{
+  "_": "Sound bank for the mix (engine/mix.py, mix_piece.py, lib/finish.js). Files live next to this file: <name>.mp3 or .wav, extra takes in takes/<name>-1.mp3, takes/<name>-2.mp3 ... (takes rotate so the same file never plays twice in a row). A cue name used in a scene (sfx('tap', t)) that has no file is skipped with a warning.",
+  "gain": {
+    "_": "Base level per sound, 0..1, multiplied by the volume given in the scene. Climax sounds (a stamp, a hit) 3-6 dB above the music under the voice, everything else level with the music or quieter."
+  },
+  "alias": {
+    "_": "Cue name in a scene -> file name in the bank. Lets old scenes keep their names when the bank changes, e.g. \"whoosh\": \"swish\"."
+  },
+  "attack": {
+    "_": "Low hits that phones can't play get a high-passed layer on top: \"accent\": [\"knock\", 2.6] means mix knock (above 150 Hz) at 2.6x on every accent."
+  },
+  "main": ["stamp", "tap", "thud", "accent"],
+  "quiet": ["tick"],
+  "gap": 1.2,
+  "vary_db": 1.5,
+  "vary_semitones": 0.3
+}

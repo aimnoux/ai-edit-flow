@@ -1,1 +1,17 @@
 .DS_Store
+__pycache__/
+*.pyc
+.env
+node_modules/
+.hyperframes/
+.claude/settings.local.json
+
+# media and generated files
+videos/*/cut/
+videos/*/tts/
+vertical/tts/
+engine/build/
+engine/renders/
+engine/*.html
+!engine/template*.html
+engine/lib/vendor/

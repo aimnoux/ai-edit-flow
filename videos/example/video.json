@@ -1,0 +1,6 @@
+{
+  "_": "Per-video settings for engine/build.py. head: seconds of silence before the first word of a chapter (room for a title), tail: after its last word. Keys are chapter numbers, 'default' covers the rest. end: extra seconds after the last chapter.",
+  "head": {"default": 1.2, "1": 0.4},
+  "tail": {"default": 1.5},
+  "end": 3.0
+}
