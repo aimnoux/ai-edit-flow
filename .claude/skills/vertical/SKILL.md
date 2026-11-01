@@ -1,13 +1,13 @@
 ---
 name: vertical
-description: Vertical video 9:16 for YouTube Shorts, Instagram Reels and TikTok. Use when the person asks for a short, a reel, a vertical, a batch of them, a loop or a meme format, or to fix one. Covers the batch text format, voice (clone or a recording), engine/vertical.py (build, silent, shots, render), the 9:16 safe zones, embedded captions, the ending per platform, loops without voice, the strobe check and the mix.
+description: Create or fix 9:16 Shorts, Reels and TikTok videos, batches, loops or memes. Handles platform endings, captions and vertical scenes; horizontal graphics use graphics.
 ---
 
 # Vertical video
 
 One build serves all platforms; the platform (`yt`, `ig`, `tt`) only changes the ending. Scenes are
 `engine/scenes/<batch>/s<N>.js` on top of `lib/kit.js` and `lib/vertical.js`. The look is the
-person's `style/`: if it is empty, run `style` first.
+person's `style/`.
 
 ## Text
 
@@ -34,15 +34,9 @@ estimated from the text to try the scene.
 
 ## Build, look, render
 
-Activate the Python environment from setup first. HyperFrames and frame tools use a dedicated
-`chrome-headless-shell`, with an isolated temporary profile and cleanup after each command.
-Use `node engine/hf.mjs browser ensure` to install it; never use personal Chrome or bypass the wrapper.
-
 ```
 python engine/vertical.py build vertical/<batch>.md 1 yt            # -> engine/<batch>-s1-yt.html, build/<batch>/<id>-voice.wav
-python engine/check.py <batch>-s1-yt --hf
-python engine/vertical.py shots <batch>-s1-yt 0.5 3 6 9 12 15        # contact sheet
-python engine/review.py <batch>-s1-yt                               # then the review skill
+python engine/verify.py <batch>-s1-yt                               # checks + cached sheets; then review skill
 python engine/vertical.py render <batch>-s1-yt [--music track.mp3]   # HyperFrames render -> strobe check -> mix
 ```
 

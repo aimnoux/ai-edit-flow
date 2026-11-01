@@ -1,20 +1,13 @@
 ---
 name: render
-description: Rendering and the final files. Use when the person asks to render, re-render a chapter or a stretch, resume a render that broke off, make a draft to watch, a before/after comparison, or asks where the finished video is. Covers HyperFrames rendering through engine/hf.mjs (segmented capture, --resume, timeouts), engine/render.sh for a whole horizontal video, engine/vertical.py render, logs, the strobe check, verifying the final file and where deliverables land.
+description: Render drafts or final files, resume interrupted capture, render a stretch or create a before/after comparison. Audio changes use sound.
 ---
 
 # Render
 
-HyperFrames renders a composition frame by frame in a dedicated `chrome-headless-shell`; the kit runs it at the pinned
-version through `node engine/hf.mjs` (never `npx hyperframes@...` by hand: the version lives in
-`package.json`). Long renders run in the foreground with the log in a file; never start a render in the
+HyperFrames renders a composition frame by frame. Long renders run in the foreground with the log
+in a file; never start a render in the
 background with `&` inside a command: it is cancelled when the parent exits.
-
-Run `bash setup.sh` and activate its Python environment first. `node engine/hf.mjs browser ensure`
-downloads the dedicated browser without launching it. `CHROME_PATH` may select another compatible
-`chrome-headless-shell` executable; never point it at personal Chrome. The wrapper and frame tools
-use isolated temporary profiles, clean up their browser after each command and disable the HyperFrames warm daemon. Do not use direct `npx hyperframes` commands or a running desktop browser.
-Linux ARM64 requires a separately supplied compatible shell; setup does not install system Chromium.
 
 ## Horizontal video
 
@@ -54,16 +47,16 @@ sync): re-render that video. Draft to watch: render as usual, the mix is quick.
 ## Verify the final file
 
 ```
-ffprobe -v error -show_entries format=duration:stream=width,height,r_frame_rate -of default=nw=1 out.mp4
+python engine/verify.py <id> --video out.mp4                          # cached checks, sheets and media metadata
 ffmpeg -i out.mp4 -af ebur128=peak=true -f null - 2>&1 | tail -12       # -14 LUFS, true peak <= -1.5
-python engine/review.py <id> --video out.mp4                           # dead stretches and lulls in the render
 ```
 
-Duration matches `timing.json` (`total`) or the composition's `data-duration`; a mismatch means a
-chapter is missing from the concat or the mix is short.
+Use the full composition id for a chapter or vertical render; `--chapter A B` scopes a stretch.
+For an assembled horizontal file, verify the project with `--project <slug>` and separately match
+its duration to `timing.json` (`total`); a mismatch can mean a missing chapter or short mix.
+Complete the `review` workflow for any pending visual verdict before showing the result.
 
 ## Deliverables
 
 Finished files stay in `engine/renders/<project>/`: `<slug>.mp4` and `<slug>.srt` for a horizontal video,
-`<batch>-s<N>-<platform>.mp4` per vertical. Say the path. Don't attach videos to the chat, don't copy them
-elsewhere unless the person named a folder; then copy, don't move.
+`<batch>-s<N>-<platform>.mp4` per vertical. If the person named another folder, copy there without moving the originals.

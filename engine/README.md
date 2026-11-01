@@ -23,7 +23,8 @@ environment, keep that one active. Run scripts from the repository root with
 | `vertical.py` | Vertical video: `build`, `silent`, `shots`, `render` |
 | `check.py` | Script errors in compositions and the cue count, headless Chrome, no render |
 | `shots.py` | Contact sheet of frames at given seconds |
-| `review.py` | Sheets and `REVIEW-INPUT.md` for the frame review |
+| `review.py`, `review_cache.py` | Cached sheets, integrity manifests and explicitly recorded reviewer conclusions |
+| `verify.py` | One-command runtime/layout/review and optional final-file checks, with concise reports |
 | `mix.py`, `mix_piece.py` | Mix: voice -16 LUFS, effects at cues from `style/sound/`, music with ducking, final -14 LUFS |
 | `compare.py` | Before/after as one video: `stack`, `grid`, `seq`, `chapter`, `mix` |
 | `render.sh` | Full render of a horizontal video: chapters -> mix -> final MP4 and SRT |
@@ -70,9 +71,7 @@ python engine/stt.py recording.m4a videos/<slug>/cut/stt.json
 python engine/cut.py recording.m4a videos/<slug>/cut/stt.json videos/<slug>/script.md videos/<slug>/cut [--drop videos/<slug>/drops.json]
 python engine/pad_chapters.py <slug> [--voice cleaned.wav]
 python engine/build.py <slug> --cut videos/<slug>/cut/pad
-python engine/check.py --project <slug> --hf
-python engine/shots.py <slug>-ch1 0.5 3 8
-python engine/review.py <slug>-ch1
+python engine/verify.py --project <slug>
 MUSIC=track.mp3 bash engine/render.sh <slug>
 ```
 
@@ -93,8 +92,7 @@ bash engine/render.sh <slug>
 ```
 python engine/voice.py vertical/<batch>.md 1
 python engine/vertical.py build vertical/<batch>.md 1 yt
-python engine/vertical.py shots <batch>-s1-yt 0.5 3 8
-python engine/review.py <batch>-s1-yt
+python engine/verify.py <batch>-s1-yt
 python engine/vertical.py render <batch>-s1-yt [--music track.mp3]
 ```
 
@@ -116,3 +114,47 @@ python -m unittest discover -s tests -v
 
 The regression suite uses synthetic media and mocked browser/API boundaries; it does not require an
 ElevenLabs key or launch personal Chrome. It is separate from setup and rendering.
+
+## One-command verification and review reuse
+
+```
+python engine/verify.py example-ch1
+python engine/verify.py --project example
+python engine/verify.py example-s1-yt --video engine/renders/example/example-s1-yt.mp4
+python engine/verify.py example-ch1 --chapter 2 6 --json
+```
+
+Use this after changing a composition. The command runs the strict runtime/HyperFrames checks and
+prepares beat, seam and phone sheets once. Successful unchanged inputs reuse the evidence. It does
+not render, regenerate speech or call an AI reviewer. `--video` requires one composition and adds
+ffprobe checks for video/audio streams, dimensions, frame rate and full composition duration; video
+motion metrics are limited to `--chapter` when supplied. `--strict` makes warnings fail too.
+
+Stdout is a short summary (or one JSON object with `--json`). Follow the emitted report, log and
+review paths under `engine/build/`; full checker output and tracebacks stay in per-composition log
+files. `passed` means automated checks passed. `ready_to_show` also requires a current explicit
+`Verdict: PASS` from the independent reviewer. A recorded `Verdict: FAIL` makes verification fail.
+
+The review skill sends only the evidence, script, style layer and its reference checklist to a fresh
+reviewer. Save that answer to a file, then bind it to the exact verified target/scope:
+
+```
+python engine/review.py example-ch1 --record-review reviewer.md
+```
+
+Include the same `--chapter` and `--video` options used for verification. The file must contain
+the `Fingerprint: <hash>` line copied from `REVIEW-INPUT.md` and exactly one `Verdict: PASS` or
+`Verdict: FAIL` line. A conclusion from older inputs is rejected. Reuse never invents or changes the verdict.
+`--force` regenerates evidence and invalidates any previous conclusion, even with identical inputs.
+
+Freshness uses file contents, not timestamps: composition/timing, referenced scene/imports/assets,
+shared code and templates, source script/settings, global style, review checklist, tool configuration,
+browser binary and optional video, plus exact range. A shared style change invalidates every affected
+composition; an unrelated chapter's scene change leaves other chapters reusable. Missing or changed
+artifacts, corrupted manifests and changed verdict text cannot produce a valid cache hit. Unknown
+external/dynamic dependencies block reusable approval and make verification fail with a reason;
+make those dependencies local and explicit before recording a verdict. Use `--chapter START END`
+to review a changed stretch; a full-composition review still needs its own current conclusion.
+
+Review artifacts, manifests and logs stay in ignored `engine/build/`. Repeated unchanged verification
+avoids capture and AI review work; actual model token savings depend on the task and session.

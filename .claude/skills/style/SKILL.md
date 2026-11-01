@@ -1,6 +1,6 @@
 ---
 name: style
-description: Building and keeping the person's visual and sound style, session by session. Use when style/visual.md is still the template, when the person wants to set up, change or discuss their look (palette, fonts, the world of the frame, motion, sound, captions, endings), says "set up my style", gives feedback about how something looks, or when another skill finds no style to work from. Writes style/visual.md, style/tokens.css, style/config.json, style/world.html, style/overlay.html, the sound bank plan and the style layer of the review checklist.
+description: Set up or change the visual and sound style, including palette, typography, motion and endings. Record look feedback; scene implementation uses graphics or vertical.
 ---
 
 # Style
@@ -38,8 +38,9 @@ overlay slots into the templates; nothing in `engine/` has to change for a style
    one display face and one mono face, local files in `style/fonts/` (OFL or licensed; never a CDN).
    Write `tokens.css`. Sizes: the floor for readable text is 28 px at 1080 height (phones), the main
    line at least 64 px in 16:9.
-4. **Test on the example.** `python3 engine/build.py example --estimate`, `python3 engine/shots.py example-ch1 1 4 7`,
-   and the vertical example. Look at the sheet with the person. Adjust tokens, not scenes.
+4. **Test on the example.** `python engine/build.py example --estimate`, then
+   `python engine/verify.py example-ch1` and the `review` workflow; also build the vertical example.
+   Look at the verified sheets with the person. Adjust tokens, not scenes.
 5. **Motion.** Durations and curves (the kit's defaults are in `kit.js`: EASE, DUR), the list of what is
    forbidden (bounces, pulses, drift, flashes are off already), how things enter and leave, the event
    rate (1.5-3 s in 16:9, 0.7-1.5 s in 9:16 unless the person wants calmer).

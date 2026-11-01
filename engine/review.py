@@ -16,6 +16,10 @@ Then a fresh agent follows the review skill: it gets only REVIEW-INPUT.md, the s
 of this stretch, and returns lines `t=... · where · problem -> fix · what to keep` ranked P0/P1/P2.
 """
 import argparse
+import contextlib
+from html import unescape
+import math
+import tempfile
 import json
 import os
 import re
@@ -27,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import BUILD, HERE, run_chrome, run_hf  # noqa: E402
 from compare import chapter  # noqa: E402
+import review_cache as cache  # noqa: E402
 
 SKIP = {"film_silent", "nested_structure_needs_subcomposition"}   # sound is mixed outside the composition; the world is one layer by design
 PAGE = 24
@@ -64,6 +69,11 @@ def project(cid, out, chap):
     comp = HERE / f"{cid}.html"
     if chap:
         chapter(comp, idx, *chap)
+        # compare.chapter rounds its display duration; retain the exact requested bounds here.
+        exact = idx.read_text(encoding="utf-8")
+        exact = re.sub(r'(id="root"[^>]*data-duration=")[^"]+',
+                       lambda m: m.group(1) + repr(chap[1] - chap[0]), exact, count=1)
+        idx.write_text(exact, encoding="utf-8")
     else:
         shutil.copy(comp, idx)
     h = idx.read_text(encoding="utf-8")
@@ -77,13 +87,31 @@ def project(cid, out, chap):
 def scenes(proj):
     dom = run_chrome("--virtual-time-budget=6000", "--dump-dom", (proj / "index.html").resolve().as_uri()).stdout
     err = re.search(r'data-err="([^"]*)"', dom)
-    if err:
-        raise SystemExit("error in scenes: " + err.group(1))
-    sc = json.loads(re.search(r'data-scenes="([^"]*)"', dom).group(1).replace("&quot;", '"'))
-    root = re.search(r'id="root"[^>]*', dom).group(0)
-    dur = float(re.search(r'data-duration="([\d.]+)"', root).group(1))
-    vertical = int(re.search(r'data-height="(\d+)"', root).group(1)) > int(re.search(r'data-width="(\d+)"', root).group(1))
-    return sorted(sc), dur, vertical
+    if err and err.group(1):
+        raise RuntimeError("error in scenes: " + unescape(err.group(1)))
+    registered = re.search(r'data-scenes="([^"]*)"', dom)
+    cues = re.search(r'id="cues">(.*?)</script>', dom, re.S)
+    root = re.search(r'id="root"[^>]*data-composition-id=[^>]*', dom)
+    if not registered or not cues or not root:
+        raise RuntimeError("Composition did not finish loading: missing root, cues or scene registration")
+    sc = json.loads(unescape(registered.group(1)))
+    marks = json.loads(cues.group(1))
+    if not isinstance(sc, list) or not isinstance(marks, list):
+        raise RuntimeError("Composition returned invalid cue/scene data")
+    root = root.group(0)
+    try:
+        dur = float(re.search(r'data-duration="([\d.]+)"', root).group(1))
+        width = int(re.search(r'data-width="(\d+)"', root).group(1))
+        height = int(re.search(r'data-height="(\d+)"', root).group(1))
+        if not math.isfinite(dur) or dur <= 0 or width <= 0 or height <= 0:
+            raise ValueError("invalid duration/dimensions")
+        if any(len(bound) != 2 or any(not math.isfinite(float(t)) for t in bound)
+               or not 0 <= bound[0] <= bound[1] <= dur + 0.001 for bound in sc):
+            raise ValueError("invalid scene bounds")
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise RuntimeError("Composition returned invalid duration/dimensions/scenes") from exc
+    return sorted(sc), dur, height > width
+
 
 
 def snap(proj, times, dst, timeout=None):
@@ -138,7 +166,12 @@ def check(proj):
         raise RuntimeError("hyperframes check returned an incomplete report")
     lines = []
     for k in ["lint", "runtime", "layout", "motion", "contrast", "craft"]:
-        for f in (d.get(k) or {}).get("findings") or []:
+        block = d.get(k) or {}
+        if not isinstance(block, dict) or not isinstance(block.get("findings", []), list):
+            raise RuntimeError(f"hyperframes check returned malformed {k} findings")
+        for f in block.get("findings") or []:
+            if not isinstance(f, dict):
+                raise RuntimeError(f"hyperframes check returned malformed {k} finding")
             if f.get("code") in SKIP:
                 continue
             lines.append(f"- t={f.get('time', 0):.1f}s · {k}/{f.get('code')} ({f.get('severity')}) · {(f.get('message') or '')[:220]}")
@@ -147,13 +180,23 @@ def check(proj):
     return lines
 
 
-def dead(video, floor=10, span=3.0):
+def metric_input(video, chapter):
+    args = ["ffmpeg", "-v", "error"]
+    if chapter:
+        args += ["-ss", repr(chapter[0])]
+    args += ["-i", str(video)]
+    if chapter:
+        args += ["-t", repr(chapter[1] - chapter[0])]
+    return args
+
+
+def dead(video, floor=10, span=3.0, chapter=None):
     """Stretches longer than span seconds where the frame doesn't change: the local difference of neighbouring
     frames stays under floor after a blur (grain gives 1-5, a word or a line appearing gives 10+). The bottom
     10 % of the frame is ignored: a progress bar there would hide every pause."""
-    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-vf",
+    r = subprocess.run(metric_input(video, chapter) + ["-vf",
                         "crop=iw:ih*0.9:0:0,scale=320:-1,format=gray,gblur=sigma=2,tblend=all_mode=difference,signalstats,metadata=print:key=lavfi.signalstats.YMAX:file=-",
-                        "-an", "-f", "null", "-"], capture_output=True, text=True).stdout
+                        "-an", "-f", "null", "-"], capture_output=True, text=True, check=True).stdout
     ts = re.findall(r"pts_time:([\d.]+)", r)
     ys = re.findall(r"YMAX=([\d.]+)", r)
     out, start = [], None
@@ -169,13 +212,13 @@ def dead(video, floor=10, span=3.0):
     return out
 
 
-def lulls(video, span=1.5, floor=1.5):
+def lulls(video, span=1.5, floor=1.5, chapter=None):
     """Attention lulls: stretches longer than span seconds where less than floor % of the frame changes (bottom
     10 % ignored). A couple of typed letters, a cursor or a grey highlight is not an event; a thing entering,
     a reframe, a marker is."""
     vf = ("crop=iw:ih*0.9:0:0,scale=270:-1,format=gray,gblur=sigma=1.5,tblend=all_mode=difference,"
           "lutyuv=y='if(gt(val,24),255,0)',signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-")
-    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-vf", vf, "-an", "-f", "null", "-"], capture_output=True, text=True).stdout
+    r = subprocess.run(metric_input(video, chapter) + ["-vf", vf, "-an", "-f", "null", "-"], capture_output=True, text=True, check=True).stdout
     ts = [float(x) for x in re.findall(r"pts_time:([\d.]+)", r)]
     ys = [float(x) / 255 * 100 for x in re.findall(r"YAVG=([\d.]+)", r)]
     out, last = [], 0.0
@@ -189,19 +232,8 @@ def lulls(video, span=1.5, floor=1.5):
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("cid")
-    ap.add_argument("--chapter", nargs=2, type=float, help="only this stretch, seconds")
-    ap.add_argument("--video")
-    ap.add_argument("-o")
-    a = ap.parse_args()
-    name = a.cid + (f"-{a.chapter[0]:.0f}-{a.chapter[1]:.0f}" if a.chapter else "")
-    out = Path(a.o).resolve() if a.o else BUILD / "review" / name
-    out.mkdir(parents=True, exist_ok=True)
-    for f in out.glob("*.jpg"):
-        f.unlink()
-    proj = project(a.cid, out, a.chapter)
+def _generate(cid, out, chap, video, name):
+    proj = project(cid, out, chap)
     sc, dur, vertical = scenes(proj)
     step = 1.5 if vertical else 3.0
     beats = [t for s, e in sc for t in (s + 0.3, (s + e) / 2) if 0 <= t < dur]
@@ -212,20 +244,116 @@ def main():
     w, cols = (270, 8) if vertical else (480, 4)
     made = sheets(fb, out, "beats", w, cols) + sheets(fs, out, "seams", w, 8 if vertical else 6) + sheets(fb, out, "phone", 180 if vertical else 360, 10 if vertical else 6)
     found = check(proj)
-    stills = dead(a.video) if a.video else None
+    if any("(error)" in line or "(critical)" in line for line in found):
+        raise RuntimeError("HyperFrames review errors: " + "\n".join(found))
+    stills = dead(video, chapter=chap) if video else None
     md = [f"# Review: {name}", "", f"Duration {dur:.1f} s, scenes {len(sc)}, {'9:16' if vertical else '16:9'}.", "",
           "## Sheets", *[f"- {p.name}" for p in made], "",
           "## hyperframes check --json", *(found or ["- no findings"]), ""]
     if stills is not None:
         md += ["## Dead stretches in the render (> 3 s without change)", *([f"- {s:.1f}-{e:.1f} s ({e - s:.1f} s)" for s, e in stills] or ["- none"]), ""]
         span = 1.5 if vertical else 3.0
-        gaps = lulls(a.video, span)
+        gaps = lulls(video, span, chapter=chap)
         md += [f"## Attention lulls (> {span:g} s without an event: less than 1.5 % of the frame changes)",
                *([f"- {s:.1f}-{e:.1f} s ({e - s:.1f} s)" for s, e in gaps] or ["- none"]), ""]
     (out / "REVIEW-INPUT.md").write_text("\n".join(md), encoding="utf-8")
     shutil.rmtree(proj, ignore_errors=True)
-    print(out / "REVIEW-INPUT.md")
+    if not made:
+        raise RuntimeError("Review produced no sheets")
+    return {"sheets": [p.name for p in made], "findings": found,
+            "runtime": {"scenes": len(sc), "duration": dur, "vertical": vertical}}
+
+
+def _run_review(cid, chapter=None, video=None, out=None, force=False, record_review=None):
+    chap = cache.normalize_chapter(chapter)
+    name = cache.review_name(cid, chap)
+    out = Path(out).resolve() if out is not None else (BUILD / "review" / name).resolve()
+    current = cache.fingerprint(cid, chap, video)
+    out.mkdir(parents=True, exist_ok=True)
+    with cache.review_lock(out):
+        manifest = cache.read_manifest(out, current)
+        if record_review is not None:
+            if force:
+                raise ValueError("--force and --record-review cannot be combined")
+            if manifest is None:
+                raise RuntimeError("Recording a conclusion requires an existing current review cache")
+            source = Path(record_review).resolve()
+            review_text = source.read_text(encoding="utf-8")
+            if not review_text.strip():
+                raise ValueError("Reviewer conclusion must be nonempty")
+            cache.reviewer_binding(review_text, current["fingerprint"])
+            if cache.fingerprint(cid, chap, video)["fingerprint"] != current["fingerprint"]:
+                raise RuntimeError("Review inputs changed while recording the conclusion")
+            (out / "REVIEW.md").write_text(review_text, encoding="utf-8")
+            manifest["conclusion"] = {"fingerprint": current["fingerprint"],
+                                      "sha256": cache.digest(out / "REVIEW.md")}
+            cache.atomic_json(out / cache.MANIFEST, manifest)
+        status = "cached"
+        if manifest is None or force:
+            # Invalidate before work: an interrupted/failed generation must never leave a success manifest.
+            (out / cache.MANIFEST).unlink(missing_ok=True)
+            (out / "REVIEW.md").unlink(missing_ok=True)
+            with tempfile.TemporaryDirectory(prefix=".review-work-", dir=out.parent) as work:
+                staging = Path(work)
+                result = _generate(cid, staging, chap, video, name)
+                after = cache.fingerprint(cid, chap, video)
+                if after["fingerprint"] != current["fingerprint"]:
+                    raise RuntimeError("Review inputs changed during generation; rerun review")
+                input_path = staging / "REVIEW-INPUT.md"
+                input_path.write_text(input_path.read_text(encoding="utf-8")
+                                      + f"\nFingerprint: {current['fingerprint']}\n", encoding="utf-8")
+                artifacts = {p: cache.digest(staging / p) for p in ["REVIEW-INPUT.md", *result["sheets"]]}
+                manifest = {"schema": cache.SCHEMA, "fingerprint": current["fingerprint"],
+                            "artifacts": artifacts, "sheets": result["sheets"],
+                            "findings": result["findings"], "runtime": result["runtime"],
+                            "conclusion": None}
+                for old in out.glob("*.jpg"):
+                    old.unlink()
+                for path in artifacts:
+                    os.replace(staging / path, out / path)
+                if current["reusable"]:
+                    cache.atomic_json(out / cache.MANIFEST, manifest)
+                status = "generated"
+        if cache.fingerprint(cid, chap, video)["fingerprint"] != current["fingerprint"]:
+            (out / cache.MANIFEST).unlink(missing_ok=True)
+            (out / "REVIEW.md").unlink(missing_ok=True)
+            raise RuntimeError("Review inputs changed before returning evidence; rerun review")
+        # Cached evidence is still pending until the caller explicitly records reviewer text.
+        return {"status": status, "fingerprint": current["fingerprint"], "cid": cid,
+                "chapter": chap, "input": str(out / "REVIEW-INPUT.md"),
+                "sheets": [str(out / p) for p in manifest["sheets"]],
+                "conclusion": cache.conclusion(out, manifest), "findings": manifest["findings"],
+                "runtime": manifest["runtime"], "reusable": current["reusable"],
+                "cache_notes": current["reasons"]}
+
+
+def run_review(cid, chapter=None, video=None, out=None, force=False, record_review=None):
+    """Generate/reuse evidence; only explicit reviewer text makes the conclusion current."""
+    with contextlib.redirect_stdout(sys.stderr):
+        return _run_review(cid, chapter, video, out, force, record_review)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cid")
+    ap.add_argument("--chapter", nargs=2, type=float, help="only this stretch, seconds")
+    ap.add_argument("--video")
+    ap.add_argument("-o")
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--record-review", metavar="PATH")
+    a = ap.parse_args()
+    try:
+        result = run_review(a.cid, a.chapter, a.video, a.o, a.force, a.record_review)
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+        if a.json:
+            print(json.dumps({"status": "error", "error": str(exc)}))
+        else:
+            print(str(exc), file=sys.stderr)
+        return 1
+    print(json.dumps(result) if a.json else result["input"])
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

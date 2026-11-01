@@ -1,6 +1,6 @@
 ---
 name: voice
-description: The voice of a video. Use when the person asks to clean a recording, clone their voice, voice a script or a vertical batch with the clone, re-voice one line, fix how a word is pronounced, or when ElevenLabs fails. Covers cleanup recommendations, cloning (engine/tts_elevenlabs.py --clone), voicing with word timing (engine/voice.py), the pronunciation map in style/config.json, credits and the attempt limit.
+description: Clean recorded speech, clone a voice, voice scripts, fix pronunciation or revoice lines. Troubleshoot ElevenLabs failures; recording cuts use cut.
 ---
 
 # Voice

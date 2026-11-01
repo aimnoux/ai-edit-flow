@@ -61,6 +61,14 @@ CLAUDE.md          how the agent works with you
 
 Graphics are rendered with [HyperFrames](https://hyperframes.heygen.com) (HTML + GSAP compositions), pinned to one version in `package.json`.
 
+## Verify once, reuse the evidence
+
+`python engine/verify.py <composition-id>` runs runtime and HyperFrames checks and prepares the
+frame-review sheets in one command (`--project <slug>` checks a project; `--video out.mp4` also checks
+the render). Unchanged inputs reuse cached evidence and a recorded reviewer conclusion, saving
+browser launches and repeated frame capture. Changed inputs invalidate the cache. A machine pass
+still needs an independent visual verdict before the result is shown; `--force` requests a fresh pass.
+
 ## Status
 
 Work in progress. The kit is being assembled alongside a free video course that walks through the whole pipeline. The course link will appear here.

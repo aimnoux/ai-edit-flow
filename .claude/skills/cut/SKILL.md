@@ -1,6 +1,6 @@
 ---
 name: cut
-description: Rough cut of a recording against the script. Use when the person sends a recording (audio or video) of them reading a script, asks to cut takes, pauses or fillers, mark retakes by hand, or asks how to record. Covers speech-to-text with word timestamps (engine/stt.py), the cut itself (engine/cut.py), manual take marking (drops.json), chapter padding (engine/pad_chapters.py) and the rough voice file the person listens to.
+description: Cut retakes, pauses and fillers from audio or video against a script; handle recording guidance and manual take selection. Voice cleanup uses voice.
 ---
 
 # Cut
@@ -21,9 +21,6 @@ audio-only input or `rough.mp4` for video (the kept speech, pauses normalized), 
   extra pause; notes (`>`), tables and headings are not spoken.
 
 ## Steps
-
-Activate the environment created by `bash setup.sh` before running Python commands
-(`source .venv/bin/activate`; Windows Git Bash: `source .venv/Scripts/activate`).
 
 ```
 python engine/stt.py <recording> videos/<slug>/cut/stt.json               # words with timestamps (ElevenLabs Scribe)

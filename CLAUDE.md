@@ -50,8 +50,25 @@ package.json       the single HyperFrames version pin; scripts run it through en
 - Graphics are code: HyperFrames compositions, GSAP timelines, deterministic (no `Date.now()`,
   no `Math.random()`, no network). Fonts and libraries are local.
 - Timing comes from the voice: word timestamps, `W("1.2", "phrase")` in scenes. Never guess times.
-- One HyperFrames version, pinned in `package.json`. Run it as `node engine/hf.mjs <command>`.
-- After every change to a composition: `python3 engine/check.py <id> --hf` (script errors, then the
-  HyperFrames lint), fix before showing.
+- Activate the setup Python environment before commands (`source .venv/bin/activate`; Windows Git
+  Bash: `source .venv/Scripts/activate`).
+- HyperFrames is pinned in `package.json`; run it through `node engine/hf.mjs <command>`. Frame tools
+  use a dedicated `chrome-headless-shell` with isolated temporary profiles and cleanup, never personal
+  Chrome. `node engine/hf.mjs browser ensure` installs it. Linux ARM64 needs a compatible shell via
+  `CHROME_PATH`; never bypass the wrapper with direct `npx hyperframes`.
+- After a timing, layout or composition change, use the verification workflow below; fix machine
+  errors and resolve the visual review before showing.
 - Paths through variables and auto-detection (Chrome, fonts, cache), nothing OS-specific in code.
 - Finished files go to `engine/renders/<project>/`. Don't send files into the chat.
+
+## Verification
+
+```
+python engine/verify.py <id> [<id>...]
+python engine/verify.py --project <slug>
+```
+
+This runs runtime/HyperFrames checks and prepares cached review evidence. Read the emitted summary
+and paths; full logs stay in `engine/build/`. `--chapter A B`, `--video PATH`, `--force` and `--json`
+are documented in `engine/README.md`. Reuse a visual verdict only when it is current and PASS.
+Pending needs the independent `review` skill; machine success never grants visual approval.

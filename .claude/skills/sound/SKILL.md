@@ -1,6 +1,6 @@
 ---
 name: sound
-description: Music, sound effects and the mix. Use when the person asks for music options, a sound on an action, to fix levels, loudness or ducking, to build or extend the sound bank in style/sound/, or when a render needs its audio. Covers cues in scenes (sfx), the bank and takes, generating effects and music (ElevenLabs or any tool), checking tracks for holes, engine/mix.py and mix_piece.py levels (-16 / -14 LUFS, -1.5 dBTP), and the sound diet.
+description: Choose music, build the sound bank, place effects and fix mixing, ducking or loudness. Voice cleanup and cloning use voice.
 ---
 
 # Sound
