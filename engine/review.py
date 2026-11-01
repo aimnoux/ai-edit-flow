@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import BUILD, HERE, HF, chrome_cmd  # noqa: E402
+from common import BUILD, HERE, run_chrome, run_hf  # noqa: E402
 from compare import chapter  # noqa: E402
 
 SKIP = {"film_silent", "nested_structure_needs_subcomposition"}   # sound is mixed outside the composition; the world is one layer by design
@@ -75,8 +75,7 @@ def project(cid, out, chap):
 
 
 def scenes(proj):
-    dom = subprocess.run(chrome_cmd("--virtual-time-budget=6000",
-                          "--dump-dom", (proj / "index.html").resolve().as_uri()), capture_output=True, text=True).stdout
+    dom = run_chrome("--virtual-time-budget=6000", "--dump-dom", (proj / "index.html").resolve().as_uri()).stdout
     err = re.search(r'data-err="([^"]*)"', dom)
     if err:
         raise SystemExit("error in scenes: " + err.group(1))
@@ -91,9 +90,15 @@ def snap(proj, times, dst, timeout=None):
     times = sorted({round(t, 2) for t in times})
     if not times:
         return []
-    subprocess.run(HF + ["snapshot", "--at", ",".join(map(str, times)), "--no-end", "--describe", "false", "-o", str(dst), str(proj)],
-                   check=True, capture_output=True, timeout=timeout)
-    return [(t, p) for t, p in zip(times, sorted(dst.glob("*.png"), key=lambda p: float(re.search(r"at-([\d.]+)s", p.name).group(1))))]
+    # Clear old captures: otherwise a second review may pair new times with stale images.
+    if dst.exists():
+        shutil.rmtree(dst)
+    run_hf("snapshot", "--at", ",".join(map(str, times)), "--no-end", "--describe", "false", "-o", str(dst), str(proj),
+           timeout=timeout).check_returncode()
+    paths = sorted(dst.glob("*.png"), key=lambda p: float(re.search(r"at-([\d.]+)s", p.name).group(1)))
+    if len(paths) != len(times):
+        raise RuntimeError(f"Snapshot returned {len(paths)} frames for {len(times)} requested times")
+    return list(zip(times, paths))
 
 
 def sheets(frames, out, name, width, cols):
@@ -124,17 +129,21 @@ def sheets(frames, out, name, width, cols):
 
 
 def check(proj):
-    r = subprocess.run(HF + ["check", "--json", str(proj)], capture_output=True, text=True)
+    r = run_hf("check", "--json", str(proj), timeout=180)
     try:
         d = json.loads(r.stdout)
     except json.JSONDecodeError:
-        return [f"- hyperframes check gave no JSON: {(r.stderr or r.stdout)[-300:]}"]
+        raise RuntimeError(f"hyperframes check gave no JSON: {(r.stderr or r.stdout)[-300:]}")
+    if not isinstance(d, dict) or not any(isinstance(d.get(k), dict) for k in ("lint", "runtime", "layout")):
+        raise RuntimeError("hyperframes check returned an incomplete report")
     lines = []
     for k in ["lint", "runtime", "layout", "motion", "contrast", "craft"]:
         for f in (d.get(k) or {}).get("findings") or []:
             if f.get("code") in SKIP:
                 continue
             lines.append(f"- t={f.get('time', 0):.1f}s · {k}/{f.get('code')} ({f.get('severity')}) · {(f.get('message') or '')[:220]}")
+    if r.returncode and not lines:
+        raise RuntimeError(f"hyperframes check failed ({r.returncode}): {r.stderr[-300:]}")
     return lines
 
 
@@ -155,6 +164,8 @@ def dead(video, floor=10, span=3.0):
             if start is not None and t - start > span:
                 out.append((start, t))
             start = None
+    if start is not None and ts and float(ts[-1]) - start > span:
+        out.append((start, float(ts[-1])))
     return out
 
 

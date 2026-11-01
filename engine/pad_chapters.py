@@ -4,7 +4,7 @@
   python3 engine/pad_chapters.py <slug> [--cut videos/<slug>/cut] [--voice clean.wav] [--out videos/<slug>/cut/pad] [--speed 1.0]
 
 Takes words.json from the cut (words on the cut timeline with script blocks) and a voice of the same
-length (the cleaned one, or rough.mp4 from the cut), inserts silence between chapters so that from the
+length (the cleaned one, or voice.wav / rough.mp4 from the cut), inserts silence between chapters so that from the
 last word of a chapter to the first word of the next there is TAIL of the previous + HEAD of the next
 (videos/<slug>/video.json), and `end` seconds at the end. Writes words.json, voice.wav and rough.mp4
 (black frame + voice) for build.py --cut.
@@ -43,7 +43,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
     ap.add_argument("--cut")
-    ap.add_argument("--voice", help="cleaned voice of the same length as the cut; default: the cut's rough.mp4")
+    ap.add_argument("--voice", help="cleaned voice of the same length as the cut; default: the cut's voice.wav or rough.mp4")
     ap.add_argument("--out")
     ap.add_argument("--speed", type=float, default=1.0)
     a = ap.parse_args()
@@ -67,7 +67,7 @@ def main():
                 cuts.append((words[prev]["e"] + min(0.3, gap / 2), need - gap))
         if c:
             prev = i
-    voice = a.voice or str(src / "rough.mp4")
+    voice = a.voice or str(src / "voice.wav" if (src / "voice.wav").exists() else src / "rough.mp4")
     if a.speed != 1.0:
         sped = out / "voice-speed.wav"
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", voice, "-af", f"atempo={a.speed}", "-ac", "1", "-ar", "48000",

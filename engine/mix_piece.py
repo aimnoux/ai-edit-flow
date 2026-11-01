@@ -19,7 +19,7 @@ from scipy.io import wavfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import BUILD, SR, duration  # noqa: E402
-from mix import cues, duck, finalize, load, lufs, place, voice_track  # noqa: E402
+from mix import cues, duck, fade_music, finalize, load, lufs, place, voice_track  # noqa: E402
 
 MUSIC_LUFS = -25.0
 
@@ -40,13 +40,16 @@ def main():
     tail = 4 * SR if a.loop else 0
     fx, count, foley = place(marks, n + tail)
     if tail:
-        fx[:tail] += fx[n:]
+        # Very short loops may wrap an effect more than once.
+        for start in range(n, len(fx), n):
+            size = min(n, len(fx) - start)
+            fx[:size] += fx[start:start + size]
     fx = fx[:n]
 
     music = np.zeros((n, 2))
     if a.music != "-":
         raw = load(a.music) * 10 ** ((a.music_db - lufs(a.music)) / 20)
-        xf = int(1.0 * SR)
+        xf = min(n, SR)
         if a.loop and abs(len(raw) - n) < SR // 50:
             music = fit(raw)   # the track is already a loop of the piece's length: no crossfade, no fades
         elif a.loop and len(raw) >= n + xf:
@@ -55,9 +58,7 @@ def main():
             music[:xf] = music[:xf] * np.sin(w) + raw[n:n + xf] * np.cos(w)
         else:
             music = fit(raw)
-            fi, fo = int(0.8 * SR), int(2.0 * SR)
-            music[:fi] *= np.linspace(0, 1, fi)[:, None]
-            music[-fo:] *= np.linspace(1, 0, fo)[:, None] ** 2
+            fade_music(music, 0.8, 2.0)
         music = duck(music, voice)
 
     BUILD.mkdir(exist_ok=True)

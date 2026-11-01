@@ -24,7 +24,7 @@ from scipy.io import wavfile
 from scipy.signal import butter, sosfilt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import BUILD, HERE, SR, STYLE, chrome_cmd, sounds  # noqa: E402
+from common import BUILD, HERE, SR, STYLE, run_chrome, sounds  # noqa: E402
 
 BANK = STYLE / "sound"
 SFX_DB = -2.0        # overall effects level under the voice
@@ -49,9 +49,7 @@ def lufs(path):
 
 def cues(cid):
     """Sound cues of a composition, as finish.js filtered them."""
-    html = subprocess.run(chrome_cmd(
-                           "--virtual-time-budget=4000", "--dump-dom", (HERE / f"{cid}.html").resolve().as_uri()),
-                          capture_output=True, text=True, timeout=180).stdout
+    html = run_chrome("--virtual-time-budget=4000", "--dump-dom", (HERE / f"{cid}.html").resolve().as_uri()).stdout
     m = re.search(r'<script type="application/json" id="cues">(.*?)</script>', html, re.S)
     return json.loads(m.group(1)) if m else []
 
@@ -230,6 +228,17 @@ def voice_track(path, n):
     return v
 
 
+def fade_music(music, fade_in, fade_out):
+    """Fade in place; short pieces can have overlapping fades, each bounded by their length."""
+    fi = min(len(music), max(0, int(fade_in * SR)))
+    fo = min(len(music), max(0, int(fade_out * SR)))
+    if fi:
+        music[:fi] *= np.linspace(0, 1, fi)[:, None]
+    if fo:
+        music[-fo:] *= np.linspace(1, 0, fo)[:, None] ** 2
+    return music
+
+
 def music_track(path, n, db=MUSIC_DB, fade_in=1.5, fade_out=4.0):
     """One track looped or cut to the whole length, normalized, with fades."""
     raw = load(path)
@@ -238,10 +247,7 @@ def music_track(path, n, db=MUSIC_DB, fade_in=1.5, fade_out=4.0):
         reps = -(-n // len(raw))
         raw = np.concatenate([raw] * reps)
     m = raw[:n].copy()
-    fi, fo = int(fade_in * SR), int(fade_out * SR)
-    m[:fi] *= np.linspace(0, 1, fi)[:, None]
-    m[-fo:] *= np.linspace(1, 0, fo)[:, None] ** 2
-    return m
+    return fade_music(m, fade_in, fade_out)
 
 
 def main():

@@ -49,15 +49,14 @@ def chapter(src, dst, a, b):
 def mix(html, video, voice_p, music_p, off, out):
     import numpy as np
     from scipy.io import wavfile
-    from common import SR, chrome_cmd, duration
+    from common import SR, run_chrome, duration
     from mix import duck, finalize, load, lufs, place, voice_track
     dur = duration(video)
     n, a = int(dur * SR), int(off * SR)
     cut = lambda x: np.pad(x[a:a + n], ((0, max(0, n - len(x[a:a + n]))), (0, 0)))
     full = voice_track(voice_p, a + n)
     voice = cut(full)
-    dom = subprocess.run(chrome_cmd("--virtual-time-budget=6000",
-                          "--dump-dom", Path(html).resolve().as_uri()), capture_output=True, text=True).stdout
+    dom = run_chrome("--virtual-time-budget=6000", "--dump-dom", Path(html).resolve().as_uri()).stdout
     cues = json.loads(re.search(r'id="cues">(.*?)</script>', dom, re.S).group(1))
     fx, count, _ = place(cues, n)
     music = np.zeros((n, 2))

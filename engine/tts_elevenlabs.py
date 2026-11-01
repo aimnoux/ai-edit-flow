@@ -33,15 +33,33 @@ def api_key():
 
 def parse_blocks(script_text):
     """{'1.1': ['paragraph', ...], ...} in script order: speech only, no notes.
-    A block is `### N.M`; paragraphs are its non-empty lines; lines starting with `>`, `|`, `#`, `---` are skipped."""
+    A block is `### N.M`; blank lines separate paragraphs, wrapped lines join with spaces.
+    Notes, tables and headings end the current paragraph; chapter/block headings end the block."""
     blocks = {}
-    for chunk in re.split(r"\n(?=##)", script_text):
-        m = re.match(r"### (\d+\.\d+)", chunk)
-        if not m:
+    current, lines = None, []
+
+    def flush():
+        if lines:
+            blocks[current].append(" ".join(lines))
+            lines.clear()
+
+    for raw in script_text.splitlines():
+        line = raw.strip()
+        heading = re.match(r"^(#{1,6})(?:\s+|$)", line)
+        if heading:
+            flush()
+            block = re.match(r"^###\s+(\d+\.\d+)(?:\s|$)", line)
+            if block:
+                current = block.group(1)
+                blocks[current] = []
+            elif len(heading.group(1)) <= 3:
+                current = None
             continue
-        paras = [l.strip() for l in chunk.split("\n")[1:]
-                 if l.strip() and not l.strip().startswith((">", "|", "#", "---"))]
-        blocks[m.group(1)] = paras
+        if not line or line.startswith((">", "|", "---")):
+            flush()
+        elif current is not None:
+            lines.append(line)
+    flush()
     return blocks
 
 

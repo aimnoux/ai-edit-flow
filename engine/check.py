@@ -9,29 +9,34 @@ Runs each composition in headless Chrome, reads the error collector of the templ
 the cue list finish.js writes. --hf adds the HyperFrames `check --json` findings (lint, layout, motion, contrast, craft) through a temporary project.
 """
 import re
-import subprocess
+import json
+from html import unescape
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import HERE, chrome_cmd  # noqa: E402
+from common import HERE, run_chrome  # noqa: E402
 
 
 def dom(cid, budget=4000):
     """DOM of a composition after its scripts ran (virtual time: the timeline is paused, nothing renders)."""
-    return subprocess.run(chrome_cmd(
-                           f"--virtual-time-budget={budget}", "--dump-dom", (HERE / f"{cid}.html").resolve().as_uri()),
-                          capture_output=True, text=True, timeout=180).stdout
+    return run_chrome(f"--virtual-time-budget={budget}", "--dump-dom",
+                      (HERE / f"{cid}.html").resolve().as_uri()).stdout
 
 
 def check(cid):
     html = dom(cid)
     err = re.search(r'data-err="([^"]*)"', html)
+    if err and err.group(1):
+        return unescape(err.group(1)), 0, 0
     m = re.search(r'id="cues">(.*?)</script>', html, re.S)
-    n = len(re.findall(r'"name":', m.group(1))) if m else 0
     sc = re.search(r'data-scenes="([^"]*)"', html)
-    scenes = sc.group(1).count("[") - 1 if sc else 0
-    return err.group(1) if err else None, n, max(scenes, 0)
+    if not m or not sc or not re.search(r'id="root"[^>]*data-composition-id=', html):
+        raise RuntimeError("Composition did not finish loading: missing root, cues or scene registration")
+    marks, bounds = json.loads(m.group(1)), json.loads(unescape(sc.group(1)))
+    if not isinstance(marks, list) or not isinstance(bounds, list):
+        raise RuntimeError("Composition returned invalid cue/scene data")
+    return None, len(marks), len(bounds)
 
 
 def hf_findings(cid):
@@ -56,18 +61,31 @@ def main():
         ids = sorted(p.stem for p in HERE.glob(f"{args[1]}-*.html"))
     else:
         ids = args
+    if not ids:
+        sys.exit("No compositions found: build the project first")
     bad = 0
     for cid in ids:
         if not (HERE / f"{cid}.html").exists():
             print(f"{cid}: no such composition in engine/")
             bad += 1
             continue
-        err, n, scenes = check(cid)
+        try:
+            err, n, scenes = check(cid)
+        except (RuntimeError, ValueError) as exc:
+            print(f"{cid}: ERROR {exc}")
+            bad += 1
+            continue
         bad += bool(err)
         print(f"{cid}: {'ERROR ' + err if err else 'ok'} · scenes {scenes} · sound cues {n}")
         if hf and not err:
-            for line in hf_findings(cid) or ["- hyperframes check: no findings"]:
-                print("  " + line)
+            try:
+                findings = hf_findings(cid)
+                for line in findings or ["- hyperframes check: no findings"]:
+                    print("  " + line)
+                bad += any("(error)" in line or "(critical)" in line for line in findings)
+            except RuntimeError as exc:
+                print(f"  ERROR {exc}")
+                bad += 1
     sys.exit(1 if bad else 0)
 
 

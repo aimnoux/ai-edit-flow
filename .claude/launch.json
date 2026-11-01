@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "engine",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "python",
       "runtimeArgs": ["engine/serve.py", "8790"],
       "port": 8790
     }

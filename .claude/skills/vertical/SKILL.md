@@ -16,24 +16,34 @@ person's `style/`: if it is empty, run `style` first.
 `N.8`). A story is 25-30 s, 55-65 words; the first line is the most surprising fact, the twist is the last
 line, nothing after it. Triggers in [brackets] on the words where something happens in the frame.
 
+Separate spoken paragraphs with a blank line. Wrapped source lines remain one paragraph; notes
+(`>`), tables and headings are excluded from speech.
+
 Endings are one short line. Shorts may ask for a like or a subscription. Reels and TikTok treat
 requests to like, share, save or tag as engagement bait and show such videos less: there, follow or a
 plain closing line only.
 
 ## Voice
 
-Clone: `python3 engine/voice.py vertical/<batch>.md [1,2]`. Recording: the person reads the whole
+Clone: `python engine/voice.py vertical/<batch>.md [1,2]`. Recording: the person reads the whole
 batch in one take with slates, then `cut.py` on the batch text (see `cut`) and `vertical.py build ... --cut <dir>`.
-Before any voice: `--estimate` builds with timing estimated from the text to try the scene.
+The cut accepts audio or video: `voice.wav` for audio-only input or `rough.mp4` for video, alongside
+`words.json`. Do not pad chapters for a vertical batch; `build --cut` assembles the requested story
+and platform ending and leaves out `N.0` slates. Before any voice: `--estimate` builds with timing
+estimated from the text to try the scene.
 
 ## Build, look, render
 
+Activate the Python environment from setup first. HyperFrames and frame tools use a dedicated
+`chrome-headless-shell`, with an isolated temporary profile and cleanup after each command.
+Use `node engine/hf.mjs browser ensure` to install it; never use personal Chrome or bypass the wrapper.
+
 ```
-python3 engine/vertical.py build vertical/<batch>.md 1 yt            # -> engine/<batch>-s1-yt.html, build/<batch>/<id>-voice.wav
-python3 engine/check.py <batch>-s1-yt --hf
-python3 engine/vertical.py shots <batch>-s1-yt 0.5 3 6 9 12 15        # contact sheet
-python3 engine/review.py <batch>-s1-yt                               # then the review skill
-python3 engine/vertical.py render <batch>-s1-yt [--music track.mp3]   # HyperFrames render -> strobe check -> mix
+python engine/vertical.py build vertical/<batch>.md 1 yt            # -> engine/<batch>-s1-yt.html, build/<batch>/<id>-voice.wav
+python engine/check.py <batch>-s1-yt --hf
+python engine/vertical.py shots <batch>-s1-yt 0.5 3 6 9 12 15        # contact sheet
+python engine/review.py <batch>-s1-yt                               # then the review skill
+python engine/vertical.py render <batch>-s1-yt [--music track.mp3]   # HyperFrames render -> strobe check -> mix
 ```
 
 - **One platform first.** Build and show Shorts (`yt`); after the "ok", the other platforms without a
@@ -71,7 +81,7 @@ platformEnding()                           automatic from block N.8 / N.9; own l
 
 ## Formats without voice
 
-`python3 engine/vertical.py silent <batch> 7 yt 8.0` builds an 8-second loop: scene `s7.js`, frame
+`python engine/vertical.py silent <batch> 7 yt 8.0` builds an 8-second loop: scene `s7.js`, frame
 `dur` equals frame 0, sound = effects at cues, mixed as a loop (`mix_piece.py --loop`). `--no-loop` for a
 one-shot. A loop with one spoken phrase: `build ... --dur=9`. Music for a loop: a track exactly the
 loop's length (`.wav`) mixes as is.

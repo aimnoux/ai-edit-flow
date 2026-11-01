@@ -15,7 +15,8 @@ seconds of the source; words that start inside are dropped. Audio events from th
 speech mask); without it the recording's own audio is used.
 
 Writes out_dir/words.json (words on the cut timeline with their script block and paragraph),
-out_dir/edl.json (what was kept and what was dropped, with reasons) and out_dir/rough.mp4.
+out_dir/edl.json (what was kept and what was dropped, with reasons), and out_dir/rough.mp4 for
+video recordings or out_dir/voice.wav for audio-only recordings.
 """
 import argparse
 import json
@@ -34,6 +35,15 @@ GAP_PARA = 0.6     # pause between script paragraphs
 PAD_IN, PAD_OUT = 0.06, 0.12
 LONG_GAP = 0.45    # pauses longer than this are shortened
 FILLERS = set(["uh", "um", "er", "erm", "ah", "mm", "hmm", "mhm"] + list(CFG.get("fillers") or []))   # your language's fillers: style/config.json -> fillers
+
+
+def video_stream_index(path):
+    """First actual video stream, ignoring an audio file's embedded cover art."""
+    result = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries",
+                             "stream=index:stream_disposition=attached_pic", "-of", "json", str(path)],
+                            capture_output=True, text=True, check=True)
+    return next((s["index"] for s in json.loads(result.stdout)["streams"]
+                 if not s.get("disposition", {}).get("attached_pic")), None)
 
 
 def speech_mask(path, hop=0.02):
@@ -224,20 +234,30 @@ def main():
         "dropped": dropped, "duration": round(total, 2)}, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # render: trim every piece + concat, short fades at the audio joins
+    vi = video_stream_index(a.video)
+    has_video = vi is not None
     parts, inputs = [], ["-i", a.video] + (["-i", a.audio] if a.audio else [])
     ai = "1:a" if a.audio else "0:a:0"
     for k, sg in enumerate(segs):
         d = sg["e"] - sg["s"]
-        parts.append(f"[0:v]trim={sg['s']:.3f}:{sg['e']:.3f},setpts=PTS-STARTPTS,fps={a.fps}[v{k}];"
-                     f"[{ai}]atrim={sg['s']:.3f}:{sg['e']:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
+        if has_video:
+            parts.append(f"[0:{vi}]trim={sg['s']:.3f}:{sg['e']:.3f},setpts=PTS-STARTPTS,fps={a.fps}[v{k}];")
+        parts.append(f"[{ai}]atrim={sg['s']:.3f}:{sg['e']:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
                      f"afade=t=in:d=0.01,afade=t=out:st={max(0, d - 0.015):.3f}:d=0.015[a{k}];")
-    cat = "".join(f"[v{k}][a{k}]" for k in range(len(segs)))
-    fc = "".join(parts) + f"{cat}concat=n={len(segs)}:v=1:a=1[v][a];[a]loudnorm=I=-16:TP=-1.5:LRA=11[an]"
+    cat = "".join((f"[v{k}]" if has_video else "") + f"[a{k}]" for k in range(len(segs)))
+    fc = "".join(parts) + f"{cat}concat=n={len(segs)}:v={int(has_video)}:a=1" + ("[v]" if has_video else "") + "[a];[a]loudnorm=I=-16:TP=-1.5:LRA=11[an]"
     (out / "filter.txt").write_text(fc, encoding="utf-8")
-    ffmpeg_filter_file(inputs, out / "filter.txt",
-                       ["-map", "[v]", "-map", "[an]", "-c:v", "libx264", "-crf", "18", "-preset", "medium",
-                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out / "rough.mp4")])
-    print(f"segments {len(segs)}, dropped words {len(dropped)}, duration {total:.1f} s -> {out / 'rough.mp4'}")
+    if has_video:
+        target = out / "rough.mp4"
+        output_args = ["-map", "[v]", "-map", "[an]", "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                       "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+    else:
+        target = out / "voice.wav"
+        output_args = ["-map", "[an]", "-ac", "1", "-ar", "48000", "-c:a", "pcm_s24le"]
+    ffmpeg_filter_file(inputs, out / "filter.txt", [*output_args, str(target)])
+    # A reused cut directory must not let downstream builders prefer an older audio-only result.
+    (out / ("voice.wav" if has_video else "rough.mp4")).unlink(missing_ok=True)
+    print(f"segments {len(segs)}, dropped words {len(dropped)}, duration {total:.1f} s -> {target}")
 
 
 if __name__ == "__main__":

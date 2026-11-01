@@ -11,7 +11,7 @@ A skeleton of an editing pipeline that an agent runs end to end. It ships as a s
 - **Cut** — removing bad takes, pauses and filler from the recording
 - **Voice** — cleanup and, if you want, a clone of your voice for retakes
 - **Graphics** — titles, charts and transitions written as code, not clicked together
-- **Review** — a second agent checks every frame against a checklist before you see it
+- **Review** — a second agent checks sampled frames and scene transitions against a checklist before you see it
 - **Sound** — music, effects and the mix
 - **Render** — the final file, ready to upload
 
@@ -25,17 +25,28 @@ Not a video editor and not a plugin for one. Not a model, not a service, no acco
 
 ## Install
 
-You need: [Claude Code](https://claude.com/claude-code), git, Python 3.10+, Node.js 22+, ffmpeg and Google Chrome (or Chromium). An [ElevenLabs](https://elevenlabs.io) key is optional: it powers speech-to-text for the cut, voice cloning and music.
+You need: [Claude Code](https://claude.com/claude-code), git, Python 3.10+, Node.js 22+ and ffmpeg (including ffprobe). Rendering uses a dedicated `chrome-headless-shell`, downloaded by setup; your personal Google Chrome is not used. An [ElevenLabs](https://elevenlabs.io) key is optional: it powers speech-to-text for the cut, voice cloning and music.
 
 ```bash
 git clone https://github.com/aimnoux/ai-edit-flow.git
 cd ai-edit-flow
 bash setup.sh
+source .venv/bin/activate
 ```
 
-`setup.sh` checks the tools, installs the Python packages and creates `.env` from `.env.example`. Put your ElevenLabs key into `.env` if you have one. Then open the folder in Claude Code and say what you want: "set up my style", "here is my recording, cut it", "make a vertical from this text".
+`setup.sh` checks the required tools, creates a local `.venv` (or uses your already activated Python virtual environment), installs Python packages there, creates `.env` from `.env.example` and downloads the dedicated browser through `node engine/hf.mjs browser ensure`. It exits with an error if a required step fails. It does not install Python packages globally or run a render. Put your ElevenLabs key into `.env` if you have one. Then open the folder in Claude Code and say what you want: "set up my style", "here is my recording, cut it", "make a vertical from this text".
 
-The repository was built on macOS and then adapted for Linux and Windows, where it has not been tested yet; expect rough edges. On Windows run `setup.sh` and `engine/render.sh` from Git Bash. Paths to Chrome, fonts and caches are found automatically; if Chrome is not found, set `CHROME_PATH` in `.env`.
+Activate the virtual environment before running Python scripts or opening Claude Code from the terminal, so child commands inherit its `PATH`. On Windows Git Bash use `source .venv/Scripts/activate`. If you used an existing environment, keep that one active instead. Rendering does not require an ElevenLabs key; speech-to-text, cloning and music generation use paid API services when you request them.
+
+The kit was built on macOS. Linux and Windows adaptations have not been fully tested; Windows commands require Git Bash, native Python/Node.js and ffmpeg on `PATH`. The pinned browser download does not support Linux ARM64: provide a compatible dedicated `chrome-headless-shell` via `CHROME_PATH` in `.env`; setup will not install system Chromium. Older systems may also need a compatible shell build.
+
+Browser lookup accepts `CHROME_PATH` first, then the HyperFrames cache (`~/.cache/hyperframes/chrome/chrome-headless-shell/`) and Puppeteer's headless-shell cache (`PUPPETEER_CACHE_DIR` or `~/.cache/puppeteer`). Only `chrome-headless-shell` executables are accepted, including symlink targets. Regular Chrome and Chrome for Testing desktop apps are not used. Each command uses an isolated temporary profile and cleans up its browser; the HyperFrames warm daemon is disabled.
+
+## Recording and script format
+
+A live recording may be audio or video. The cut writes `voice.wav` for audio-only input and `rough.mp4` for video, plus `words.json` and `edl.json`. Horizontal videos then use chapter padding; vertical videos take the cut directory directly with `vertical.py build ... --cut <dir>`.
+
+Speech lives under `### N.M` headings. Separate paragraphs with a blank line; wrapping one paragraph across several source lines does not introduce an extra pause. `> ` notes, tables and headings are not spoken. Vertical batches use `N.0` for recording slates, `N.8` for the YouTube ending and `N.9` for the Instagram/TikTok ending.
 
 ## What is inside
 

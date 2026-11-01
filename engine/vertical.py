@@ -90,6 +90,17 @@ def write_composition(project, roll, plat, total, blocks, loop):
     return cid
 
 
+def voice_timeline(parts, total):
+    """Place paragraphs into the output, padding silence or clipping at a loop's fixed end."""
+    track = np.zeros(int(total * SR), dtype=np.float32)
+    for start, audio in parts:
+        i = int(round(start * SR))
+        size = min(len(audio), len(track) - i)
+        if size > 0:
+            track[i:i + size] += audio[:size]
+    return track
+
+
 def cmd_build(reading, roll, plat, *rest):
     reading = Path(reading)
     project = reading.stem
@@ -105,7 +116,7 @@ def cmd_build(reading, roll, plat, *rest):
     end = [p for p in allp if p["block"] == eid]
     if not end and loop is None:
         sys.exit(f"no ending {num}.{ENDING[plat]} (or {num}.8) in {reading}")
-    seq = body + ([dict(end[0], src=eid, block="end")] if loop is None else [])
+    seq = body + ([dict(p, src=eid, block="end") for p in end] if loop is None else [])
     sync_style()
     (BUILD / project).mkdir(parents=True, exist_ok=True)
 
@@ -145,46 +156,68 @@ def cmd_build(reading, roll, plat, *rest):
             nxt = seq[n + 1]["block"]
             t += gap(GAP_END if nxt == "end" else GAP_PARA if nxt == p["block"] else GAP_BLOCK, name)
     total = round((t + TAIL if loop is None else loop) * FPS) / FPS
-    track = np.zeros(int(total * SR) + SR, dtype=np.float32)
-    for s, a in voice:
-        i = int(round(s * SR))
-        track[i:i + len(a)] += a
+    track = voice_timeline(voice, total)
     cid = write_composition(project, roll, plat, total, blocks, bool(loop))
     wavfile.write(BUILD / project / f"{cid}-voice.wav", SR, track[: int(total * SR)])
     print(f"{cid}: {total:.1f} s" + (" (estimated timing)" if estimate else ""))
 
 
 def build_from_cut(project, roll, plat, seq, cut_dir, loop):
-    """Live voice recorded for the batch: words.json of this video's cut (cut.py on the batch text, blocks N.*)."""
+    """Select this video's paragraphs from a batch cut and rebuild its voice timeline."""
     words = json.loads((cut_dir / "words.json").read_text(encoding="utf-8"))
     voice_file = cut_dir / "voice.wav" if (cut_dir / "voice.wav").exists() else cut_dir / "rough.mp4"
     audio = load_audio(voice_file)
-    blocks = {}
+    blocks, pieces = {}, []
     by_para = {}
-    for w in words:
+    for i, w in enumerate(words):
         if w.get("para"):
-            by_para.setdefault(w["para"], []).append(w)
+            by_para.setdefault(w["para"], []).append(i)
     for p in seq:
         src = p.get("src", p["block"])
-        ws = by_para.get(f"{src}/{p['para']}", [])
-        if not ws:
+        indices = by_para.get(f"{src}/{p['para']}", [])
+        if not indices:
             print(f"  warning: no words for {src} paragraph {p['para']} in the cut")
             continue
+        first, last = indices[0], indices[-1]
+        # Keep a little articulation around the timestamped speech, without picking up
+        # a neighbouring slate, video or alternate ending from the batch recording.
+        start = max(0, words[first]["s"] - 0.03, words[first - 1]["e"] if first else 0)
+        stop = min(len(audio) / SR, words[last]["e"] + 0.08,
+                   words[last + 1]["s"] if last + 1 < len(words) else len(audio) / SR)
+        a, b = int(round(start * SR)), int(round(stop * SR))
+        if b <= a:
+            raise ValueError(f"no audio for {src} paragraph {p['para']} in the cut")
+        pieces.append((p, [words[i] for i in indices], audio[a:b], a / SR))
+    if not pieces:
+        raise ValueError(f"no words for video {roll} in the cut")
+
+    t, voice = LEAD, []
+    for n, (p, source_words, part, offset) in enumerate(pieces):
+        src = p.get("src", p["block"])
+        dur = len(part) / SR
+        ws = [{**w, "s": round(w["s"] - offset + t, 3), "e": round(w["e"] - offset + t, 3)}
+              for w in source_words]
         trig, cur = [], 0
         for tw in p["triggers"]:
             toks = [norm(t) for t in tw.split()]
             for i in range(cur, len(ws)):
-                n = norm(ws[i]["w"])
-                if n and toks[0] and (n.startswith(toks[0][:4]) or toks[0].startswith(n[:4])):
+                key = norm(ws[i]["w"])
+                if key and toks[0] and (key.startswith(toks[0][:4]) or toks[0].startswith(key[:4])):
                     trig.append({"w": tw, "t": ws[i]["s"]}); cur = i + 1; break
             else:
                 print(f"  warning: trigger [{tw}] in {src} not found in speech")
         blocks.setdefault(p["block"], []).append({
-            "block": p["block"], "text": p["text"], "s": ws[0]["s"], "e": ws[-1]["e"],
+            "block": p["block"], "text": p["text"], "s": round(t, 3), "e": round(t + dur, 3),
             "words": [{"w": x["w"], "n": norm(x["w"]), "s": x["s"], "e": x["e"]} for x in ws], "triggers": trig})
-    total = round((loop if loop else len(audio) / SR) * FPS) / FPS
+        voice.append((t, part))
+        t += dur
+        if n + 1 < len(pieces):
+            nxt = pieces[n + 1][0]["block"]
+            name = f"{src}-{p['para']}"
+            t += gap(GAP_END if nxt == "end" else GAP_PARA if nxt == p["block"] else GAP_BLOCK, name)
+    total = round((t + TAIL if loop is None else loop) * FPS) / FPS
     cid = write_composition(project, roll, plat, total, blocks, bool(loop))
-    wavfile.write(BUILD / project / f"{cid}-voice.wav", SR, audio[: int(total * SR)])
+    wavfile.write(BUILD / project / f"{cid}-voice.wav", SR, voice_timeline(voice, total))
     print(f"{cid}: {total:.1f} s (live voice)")
 
 
@@ -216,6 +249,8 @@ def cmd_render(cid, *flags):
     out_dir.mkdir(parents=True, exist_ok=True)
     vid = out_dir / f"{cid}-video.mp4"
     music = next((flags[i + 1] for i, a in enumerate(flags) if a == "--music"), "-")
+    if music != "-":
+        music = str(Path(music).resolve())  # mixing runs from engine/, the caller supplies a root-relative path
     if "--mix-only" not in flags:
         import os
         log = BUILD / project / f"render-{cid}.log"

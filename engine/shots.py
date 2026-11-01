@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import HERE, chrome_cmd  # noqa: E402
+from common import HERE, run_chrome  # noqa: E402
 
 
 def size_of(cid):
@@ -26,16 +26,24 @@ def size_of(cid):
 
 
 def shots(cid, times, out=None):
+    if not times:
+        raise ValueError("At least one frame time is required")
     w, h = size_of(cid)
     vertical = h > w
     out = out or HERE / "build" / "frames"
     out.mkdir(parents=True, exist_ok=True)
-    tmp = Path(tempfile.mkdtemp())
+    with tempfile.TemporaryDirectory(prefix="aef-shots-") as folder:
+        return _shots(cid, times, out, w, h, vertical, Path(folder))
+
+
+def _shots(cid, times, out, w, h, vertical, tmp):
     files = []
     for i, t in enumerate(times):
         f = tmp / f"{i:02d}.png"
-        subprocess.run(chrome_cmd("--hide-scrollbars", f"--window-size={w},{h}", "--virtual-time-budget=6000", f"--screenshot={f}",
-                        (HERE / f"{cid}.html").resolve().as_uri() + f"#t={max(float(t), 0.01)}"), capture_output=True, timeout=180)
+        run_chrome("--hide-scrollbars", f"--window-size={w},{h}", "--virtual-time-budget=6000", f"--screenshot={f}",
+                   (HERE / f"{cid}.html").resolve().as_uri() + f"#t={max(float(t), 0.01)}")
+        if not f.is_file():
+            raise RuntimeError(f"Browser did not capture frame at {t}s")
         files.append(f)
     name = f"{cid}-{os.environ['SHOT_TAG']}.png" if os.environ.get("SHOT_TAG") else f"{cid}.png"
     dst = out / name

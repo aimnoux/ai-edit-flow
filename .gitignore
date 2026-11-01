@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .env
+.venv/
 node_modules/
 .hyperframes/
 .claude/settings.local.json
