@@ -9,9 +9,7 @@
       "Bash(python engine/*)",
       "Bash(bash engine/render.sh:*)",
       "Bash(bash setup.sh:*)",
-      "Bash(node engine/hf.mjs check:*)",
-      "Bash(node engine/hf.mjs lint:*)",
-      "Bash(node engine/hf.mjs snapshot:*)",
+      "Bash(node engine/hf.mjs:*)",
       "Bash(node --check:*)",
       "Bash(ffmpeg:*)",
       "Bash(ffprobe:*)"

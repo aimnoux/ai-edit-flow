@@ -1,0 +1,54 @@
+/* Style tokens. TEMPLATE with neutral values: the `style` skill replaces them with the person's palette
+   and fonts. Everything in engine/lib/*.css reads these variables and nothing else, so the look lives here.
+
+   Fonts: put the files into style/fonts/ and declare them with @font-face below. Local files only;
+   fonts from a CDN time out during render. */
+
+/* @font-face { font-family: "Display"; font-weight: 400 700; font-display: block; src: url("fonts/display.woff2") format("woff2"); } */
+/* @font-face { font-family: "Mono"; font-weight: 400 500; font-display: block; src: url("fonts/mono.woff2") format("woff2"); } */
+
+:root {
+  /* Palette: a role each, not a shade each */
+  --bg: #000000;        /* deepest background */
+  --s1: #141414;        /* surfaces, cards */
+  --s2: #2a2a2a;        /* lines, inactive */
+  --mid: #666666;       /* strokes and outlines, not for text */
+  --text-2: #a0a0a0;    /* secondary text, contrast >= 4.5:1 on --bg */
+  --fg: #ffffff;        /* main text */
+  --acc: #ffffff;       /* accent */
+  --acc-hi: #ffffff;    /* highlight on the accent */
+  --light: #ffffff;     /* color of light, if the world has light */
+  --marker: #ffd400;    /* marker on paper and interfaces */
+
+  /* Emphasis of the one active element: filter for text and SVG, box-shadow for cards and lines.
+     Set both to `none` for a style without glow. */
+  --glow: none;
+  --glow-box: none;
+
+  /* Type: one display face plus a mono face for numbers, code and labels */
+  --font-display: system-ui, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+
+  --fs-hero: 160px;     /* chapter title */
+  --fs-h1: 96px;
+  --fs-h2: 56px;
+  --fs-body: 40px;
+  --fs-label: 32px;     /* field labels, chips */
+  --fs-micro: 28px;     /* service mono labels: 28 px is the floor a phone can read */
+  --tracking-hero: -0.03em;
+  --tracking-mono: 0.06em;
+
+  /* 1920x1080 grid: margins and safe zone */
+  --pad-x: 128px;
+  --pad-y: 96px;
+
+  /* Materials */
+  --hairline: color-mix(in srgb, var(--fg) 12%, transparent);
+  --card: var(--s1);
+  --radius: 16px;
+  --radius-sm: 8px;
+
+  /* Captions (vertical video) */
+  --caption-bg: rgba(0, 0, 0, 0.6);
+  --caption-fg: var(--fg);
+}

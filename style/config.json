@@ -8,7 +8,7 @@
     "say": {}
   },
   "channel": {
-    "_": "Shown in the ending of vertical videos (subscribe / like button). avatar: a path relative to style/, e.g. avatar.png; empty draws the first letter of the name.",
+    "_": "Shown in the ending of vertical videos (subscribe / like button). avatar: a file in style/assets/, written as assets/avatar.png; empty draws the first letter of the name.",
     "name": "",
     "handle": "",
     "avatar": ""

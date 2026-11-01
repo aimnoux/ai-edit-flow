@@ -1,0 +1,64 @@
+/* Vertical 1080x1920 on top of style.css. Safe zone: graphics between 230 and 1180 in height and up to 930 in
+   width, captions 1230-1420; below and to the right sits the platform UI (Shorts, Reels, TikTok). */
+html, body, #root { width: 1080px; height: 1920px; }
+
+/* Captions: large, 3-4 words, the spoken word lights up */
+.caps { position: absolute; left: 60px; right: 150px; top: 1250px; text-align: center; pointer-events: none; }
+.cap { display: inline-block; padding: 12px 30px 16px; border-radius: 20px; font-size: 66px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.12;
+  background: var(--caption-bg); color: var(--caption-fg); }
+.cap span { display: inline-block; margin: 0 0.16em; opacity: 0.35; }
+/* Things dissolve before the caption zone: a mask on the stage only, the world stays as it is below */
+#stage { --fade: linear-gradient(180deg, #000 0, #000 1010px, rgba(0,0,0,.9) 1060px, rgba(0,0,0,.68) 1105px,
+    rgba(0,0,0,.42) 1145px, rgba(0,0,0,.2) 1180px, rgba(0,0,0,.06) 1208px, transparent 1225px);
+  -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+html.nocaps #stage { -webkit-mask-image: none; mask-image: none; }
+
+/* Vertical typography */
+.vt { position: absolute; left: 70px; width: 860px; text-align: center; }
+.vt .line.w { margin: 0 0.13em !important; }
+.slam { position: absolute; left: 40px; width: 920px; text-align: center; font-weight: 700; letter-spacing: -0.035em; line-height: 0.95; }
+.plus { position: absolute; font-family: var(--font-mono); font-weight: 500; color: var(--acc); font-variant-numeric: tabular-nums; filter: var(--glow); }
+.vchip { position: absolute; padding: 16px 34px; border-radius: var(--radius); font-size: 52px; font-weight: 600; letter-spacing: -0.01em;
+  background: var(--card); border: 1px solid var(--hairline); white-space: nowrap; }
+.vcard { position: absolute; padding: 30px 36px; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--radius); }
+.vcard .k { font-family: var(--font-mono); font-size: 28px; color: var(--text-2); margin-bottom: 12px; }
+.vcard .v { font-size: 66px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.08; }
+.code { position: absolute; font-family: var(--font-mono); font-size: 52px; color: var(--text-2); line-height: 1.5; }
+
+/* A chat window */
+.chat { position: absolute; border-radius: var(--radius); overflow: hidden; background: var(--card); border: 1px solid var(--hairline); }
+.chat-head { display: flex; gap: 18px; align-items: center; padding: 26px 32px; border-bottom: 1px solid var(--hairline); font-size: 38px; }
+.chat-head i { width: 44px; height: 44px; border-radius: 50%; background: var(--s2); border: 2px solid var(--acc); }
+.chat-view { position: absolute; left: 0; right: 0; top: 98px; bottom: 0; overflow: hidden; }
+.chat-body { padding: 26px 28px; display: flex; flex-direction: column; gap: 22px; }
+.msg { max-width: 88%; padding: 20px 26px; border-radius: var(--radius); font-size: 40px; line-height: 1.25; letter-spacing: -0.01em; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: var(--s2); }
+.msg.bot { align-self: flex-start; background: transparent; border: 1px solid var(--hairline); }
+
+/* A document sheet and a stamp */
+.doc { position: absolute; padding: 40px 44px 54px; background: #e8e8e8; color: #1a1a1a; border-radius: 6px; box-shadow: 0 30px 80px -10px rgba(0,0,0,.7);
+  font-family: Georgia, "Times New Roman", serif; text-align: center; }
+.doc .dl { font-size: 34px; line-height: 1.35; }
+.doc .dh { font-weight: 700; letter-spacing: 0.04em; font-size: 32px; margin-bottom: 10px; }
+.stamp { position: absolute; padding: 14px 30px; border: 8px solid var(--acc-hi); border-radius: var(--radius); color: var(--acc-hi);
+  font-family: var(--font-mono); font-weight: 500; font-size: 80px; letter-spacing: 0.02em; filter: var(--glow); background: var(--caption-bg); }
+
+/* A meme frame: one phrase on top for the whole video, no captions */
+.topcap { position: absolute; left: 540px; top: 222px; transform: translateX(-50%); width: max-content; max-width: 980px; white-space: nowrap;
+  padding: 10px 30px 16px; border-radius: 18px; background: var(--caption-bg); text-align: center;
+  font-weight: 600; font-size: 70px; line-height: 1.08; letter-spacing: -0.025em; color: var(--caption-fg); }
+
+/* Platform ending: the last frame dims, one button of the platform in the middle */
+.end-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.end-cta { position: absolute; left: 0; right: 0; top: 700px; display: flex; flex-direction: column; align-items: center; gap: 28px; font-family: var(--font-display); }
+.end-cta .ec-av { width: 180px; height: 180px; border-radius: 50%; background: var(--s2) center / cover no-repeat; display: grid; place-items: center;
+  font-size: 90px; font-weight: 700; color: var(--fg); }
+.end-cta .ec-name { font-size: 48px; font-weight: 600; color: #fff; }
+.end-cta .ec-btn { position: relative; padding: 24px 64px; border-radius: 999px; font-size: 44px; font-weight: 600; overflow: hidden; }
+.end-cta .ec-btn .b { position: absolute; inset: 0; display: none; place-items: center; }
+.end-cta.on .ec-btn .a { visibility: hidden; }
+.end-cta.on .ec-btn .b { display: grid; }
+.end-cta .ec-ring { width: 220px; height: 220px; border-radius: 50%; background: rgba(255,255,255,0.12); display: grid; place-items: center; color: #fff; }
+.end-cta.on .ec-ring { background: rgba(255,255,255,0.2); }
+.end-cta .ec-lbl { font-size: 44px; font-weight: 600; color: #fff; }
+.tap { position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; background: rgba(255,255,255,0.35); border: 3px solid rgba(255,255,255,0.8); }

@@ -51,6 +51,7 @@ package.json       the single HyperFrames version pin; scripts run it through en
   no `Math.random()`, no network). Fonts and libraries are local.
 - Timing comes from the voice: word timestamps, `W("1.2", "phrase")` in scenes. Never guess times.
 - One HyperFrames version, pinned in `package.json`. Run it as `node engine/hf.mjs <command>`.
-- After every change to a composition: `node engine/hf.mjs check` and `python3 engine/check.py`.
+- After every change to a composition: `python3 engine/check.py <id> --hf` (script errors, then the
+  HyperFrames lint), fix before showing.
 - Paths through variables and auto-detection (Chrome, fonts, cache), nothing OS-specific in code.
 - Finished files go to `engine/renders/<project>/`. Don't send files into the chat.

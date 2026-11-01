@@ -1,0 +1,54 @@
+/* Structure of a 1920x1080 composition. Colors, fonts and sizes come from lib/tokens.css (a copy of
+   style/tokens.css); this file never names a color. The style's own rules go into style/*.html and tokens. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 1920px; height: 1080px; overflow: hidden;
+  background: var(--bg); font-family: var(--font-display); color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+#root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+.mono { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--text-2); letter-spacing: var(--tracking-mono); }
+
+/* ---------- Layers: world (style) -> stage (scenes) -> hud (captions, progress) -> overlay (style) ---------- */
+#world, #stage, #hud, #overlay { position: absolute; inset: 0; }
+#world { transform-origin: 50% 50%; }
+#overlay { pointer-events: none; }
+.scene { position: absolute; inset: 0; display: none; }
+.abs { position: absolute; }
+
+/* ---------- Text ---------- */
+.line { display: block; overflow: hidden; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+.line > .in { display: inline-block; will-change: transform; }
+.w { display: inline-block; }
+.acc-text { color: var(--acc); }
+.hero { font-size: var(--fs-hero); font-weight: 600; letter-spacing: var(--tracking-hero); line-height: 1.02; }
+.h1 { font-size: var(--fs-h1); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; }
+.h2 { font-size: var(--fs-h2); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.body { font-size: var(--fs-body); font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; }
+.dim { color: var(--text-2); }
+.glow { filter: var(--glow); }
+.tt-caret i { display: inline-block; width: 0.08em; height: 1em; vertical-align: -0.15em; background: currentColor; margin-left: 0.05em; }
+
+/* Chapter title */
+.ctitle .eyebrow { position: absolute; left: var(--pad-x); top: 330px; display: flex; align-items: center; gap: 24px; }
+.ctitle h1 { position: absolute; left: var(--pad-x); top: 390px; }
+.ctitle .sub { position: absolute; left: var(--pad-x); top: 640px; font-size: var(--fs-body); color: var(--text-2); }
+
+/* Progress on the HUD */
+.hud-prog { position: absolute; left: var(--pad-x); right: var(--pad-x); bottom: 52px; height: 3px; display: flex; gap: 10px; }
+.hud-prog i { flex: 1; background: var(--s2); border-radius: 2px; position: relative; }
+.hud-prog i b { position: absolute; inset: 0; border-radius: 2px; background: var(--acc); transform-origin: 0 50%; }
+
+/* Lists */
+.list .item { display: flex; align-items: baseline; gap: 26px; margin-bottom: 26px; }
+.list .item .k { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--text-2); letter-spacing: var(--tracking-mono); width: 64px; }
+.list .item .v { font-size: 46px; font-weight: 500; letter-spacing: -0.02em; color: var(--text-2); }
+
+/* Cards, chips, marks */
+.card { position: absolute; padding: 26px 32px; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--radius); }
+.pill { position: absolute; padding: 16px 28px; border-radius: 999px; font-size: 34px; font-weight: 500; background: var(--card); border: 1px solid var(--hairline); }
+.tag { display: inline-block; font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--text-2); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 6px 12px; }
+.strike { position: absolute; left: -2%; top: 52%; height: 6px; width: 104%; background: currentColor; border-radius: 3px; transform-origin: 0 50%; }
+.marker { background: var(--marker); color: #000; padding: 0 0.12em; border-radius: 3px; }
+svg .stroke { fill: none; stroke: var(--mid); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg .acc { stroke: var(--acc); }

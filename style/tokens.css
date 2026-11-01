@@ -33,8 +33,8 @@
   --fs-h1: 96px;
   --fs-h2: 56px;
   --fs-body: 40px;
-  --fs-label: 26px;     /* field labels, chips */
-  --fs-micro: 20px;     /* service mono labels */
+  --fs-label: 32px;     /* field labels, chips */
+  --fs-micro: 28px;     /* service mono labels: 28 px is the floor a phone can read */
   --tracking-hero: -0.03em;
   --tracking-mono: 0.06em;
 

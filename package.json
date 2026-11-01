@@ -6,7 +6,6 @@
     "hyperframes": "0.8.196"
   },
   "scripts": {
-    "check": "node engine/hf.mjs check engine",
     "preview": "node engine/hf.mjs preview engine",
     "render": "node engine/hf.mjs render"
   }
