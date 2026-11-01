@@ -11,6 +11,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).config.hyperframes;
 const args = process.argv.slice(2);
 if (args[0] === "--version") { console.log(version); process.exit(0); }
+const timeoutSeconds = Number(process.env.AEF_HF_TIMEOUT_SECONDS || "1800");
+if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0 || timeoutSeconds > 86400) {
+  console.error("AEF_HF_TIMEOUT_SECONDS must be a positive number up to 86400"); process.exit(1);
+}
 
 let selectedPython;
 function pythonCandidates() {
@@ -29,15 +33,15 @@ function browserPath() {
     selectedPython = py;
     return r.stdout.trim();
   }
-  throw new Error("Python 3.10+ is required; run bash setup.sh first");
+  throw new Error("Python 3.11-3.13 is required; run bash setup.sh first");
 }
 function guardianPython() {
   if (selectedPython) return selectedPython;
   for (const py of pythonCandidates()) {
-    const r = spawnSync(py, ["-c", "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"], { windowsHide: true });
+    const r = spawnSync(py, ["-c", "import sys; sys.exit(0 if (3,11) <= sys.version_info < (3,14) else 1)"], { windowsHide: true });
     if (r.status === 0) return py;
   }
-  throw new Error("Python 3.10+ is required; run bash setup.sh first");
+  throw new Error("Python 3.11-3.13 is required; run bash setup.sh first");
 }
 
 // Never let HyperFrames infer a system Chrome, open a browser window or keep a warm daemon.
@@ -77,7 +81,7 @@ try {
 }
 
 const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-const child = spawn(npx, ["--yes", `hyperframes@${version}`, ...args], {
+const child = spawn(npx, ["--no-install", `hyperframes@${version}`, ...args], {
   stdio: "inherit", env, detached: process.platform !== "win32",
   shell: process.platform === "win32", windowsHide: true,
 });
@@ -99,17 +103,25 @@ function stop(signal = "SIGKILL") {
   } catch (error) { if (error.code !== "ESRCH") console.error(error.message); }
 }
 let interrupted;
+let timedOut = false;
+const deadline = setTimeout(() => {
+  timedOut = true;
+  console.error(`HyperFrames timed out after ${timeoutSeconds}s`);
+  stop("SIGTERM");
+  setTimeout(() => stop(), 3000).unref();
+}, timeoutSeconds * 1000).unref();
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => { interrupted = signal; stop(signal); setTimeout(() => stop(), 3000).unref(); });
 }
 child.on("error", (error) => { console.error(error.message); stop(); process.exitCode = 1; });
 child.on("close", (code, signal) => {
+  clearTimeout(deadline);
   stop();
   guard?.stdin.end();
   if (code === 0 && ensure) {
     try { console.log(`Dedicated browser: ${browserPath()}`); }
     catch (error) { console.error(error.message); process.exitCode = 1; return; }
   }
-  process.exitCode = interrupted ? 128 + (constants.signals[interrupted] ?? 1)
+  process.exitCode = timedOut ? 124 : interrupted ? 128 + (constants.signals[interrupted] ?? 1)
     : code ?? (128 + (constants.signals[signal] ?? 1));
 });

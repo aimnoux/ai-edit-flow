@@ -23,7 +23,7 @@ mkdir -p "$R"
 for ch in "$@"; do
   echo "== render $SLUG-$ch (log: $B/render-$ch.log)"
   # a chapter that broke off resumes from its last segment with --resume (same command)
-  HF_SEGMENTED_CAPTURE=true node hf.mjs render -c "$SLUG-$ch.html" -o "$R/$ch.mp4" --fps "$FPS" --quiet >"$B/render-$ch.log" 2>&1 \
+  HF_SEGMENTED_CAPTURE=true "$PY" render.py "$SLUG-$ch" "$R/$ch.mp4" --fps "$FPS" --quiet >"$B/render-$ch.log" 2>&1 \
     || { tail -20 "$B/render-$ch.log"; echo "render of $ch failed; retry the same command with --resume: see the log"; exit 1; }
 done
 "$PY" mix.py "$SLUG" ${MUSIC:+--music "$MUSIC"}

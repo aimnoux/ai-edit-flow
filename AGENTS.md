@@ -1,0 +1,78 @@
+# AGENTS.md
+
+A starter kit for editing video with Codex or Claude Code. The person records; you cut, voice, draw graphics
+in code, review frames, mix sound and render. There is no visual style in this repository: the
+person's style lives in `style/` and is built with the `style` skill. Never invent a look. If
+`style/visual.md` is still the template, run `style` first.
+
+Canonical instructions for both agents. Edit skills in `.agents/skills/`; `.claude/skills/` is a
+generated compatibility copy. Run `python engine/sync_skills.py` after changes and
+`python engine/sync_skills.py --check` to detect drift. Never edit the generated copy directly.
+
+## How to work with the person
+
+- Propose a concrete plan. A direct request already authorizes its stated scope; carry out an approved
+  step without asking again. Pause at requested review boundaries and before new paid API work.
+  Ask only when blocked on the person, with one question and the reason.
+- Every step of a video ends with something to look at: a contact sheet, a draft render, a mix.
+  **Review frames before showing anything** (`review` skill). The person sees work that already
+  passed the checklist.
+- After a chunk of work, report briefly: what was done, what to look at, what is next.
+- Keep the person's feedback as a rule, not as a note: a correction about the look goes into
+  `style/visual.md`, a correction about the process goes into the matching skill.
+- Logs go to files; read the tail and the errors. Frames go to one contact sheet, reduced in size.
+- Nothing from `.env` (keys) is printed or committed. Commit when the person asks.
+
+## Task → skill
+
+| Task | Skill |
+|---|---|
+| New video, where to start, order of steps, what is ready | `edit` |
+| Cut takes and pauses out of a recording | `cut` |
+| Clean the voice, clone it, re-voice a line | `voice` |
+| Titles, charts, interfaces, transitions in code | `graphics` |
+| Vertical video 9:16 (Shorts, Reels, TikTok) | `vertical` |
+| Check frames before showing | `review` |
+| Music, sound effects, mix, loudness | `sound` |
+| Render, resume, final files | `render` |
+| Build or change the person's style | `style` |
+
+## Where things are
+
+```
+style/             the person's style: visual.md, tokens.css, config.json, sound/, world.html
+videos/<slug>/     a horizontal video: script.md, video.json, drops.json; cut/, tts/ are not in git
+vertical/          vertical videos: one .md per batch, tts/ is not in git
+engine/            scripts, lib/, templates; scenes/<project>/, build/, renders/ (last two not in git)
+engine/scenes/     your code per project: ch<N>.js for a horizontal video, s<N>.js for a vertical one
+.agents/skills/    the skills above
+package.json       the single HyperFrames version pin; scripts run it through engine/hf.mjs
+```
+
+## Rules that hold everywhere
+
+- Graphics are code: HyperFrames compositions, GSAP timelines, deterministic (no `Date.now()`,
+  no `Math.random()`, no network). Fonts and libraries are local.
+- Timing comes from the voice: word timestamps, `W("1.2", "phrase")` in scenes. Never guess times.
+- Activate the setup Python environment before commands (`source .venv/bin/activate`; Windows Git
+  Bash: `source .venv/Scripts/activate`).
+- HyperFrames is pinned in `package.json`; run it through `node engine/hf.mjs <command>`. Frame tools
+  use a dedicated `chrome-headless-shell` with isolated temporary profiles and cleanup, never personal
+  Chrome. `node engine/hf.mjs browser ensure` installs it. Linux ARM64 needs a compatible shell via
+  `CHROME_PATH`; never bypass the wrapper with direct `npx hyperframes`.
+- After a timing, layout or composition change, use the verification workflow below; fix machine
+  errors and resolve the visual review before showing.
+- Paths through variables and auto-detection (Chrome, fonts, cache), nothing OS-specific in code.
+- Finished files go to `engine/renders/<project>/`. Don't send files into the chat.
+
+## Verification
+
+```
+python engine/verify.py <id> [<id>...]
+python engine/verify.py --project <slug>
+```
+
+This runs runtime/HyperFrames checks and prepares cached review evidence. Read the emitted summary
+and paths; full logs stay in `engine/build/`. `--chapter A B`, `--video PATH`, `--force` and `--json`
+are documented in `engine/README.md`. Reuse a visual verdict only when it is current and PASS.
+Pending needs the independent `review` skill; machine success never grants visual approval.

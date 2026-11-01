@@ -31,8 +31,8 @@ class ReviewCacheTests(unittest.TestCase):
         self.write("engine/lib/finish.js", "// finish\n")
         self.write("engine/lib/tokens.css", "body {color: white}")
         self.write("style/tokens.css", "body {color: white}")
-        self.write(".claude/skills/review/SKILL.md", "Review all sheets")
-        self.write(".claude/skills/review/references/checklist.md", "Check contrast")
+        self.write(".agents/skills/review/SKILL.md", "Review all sheets")
+        self.write(".agents/skills/review/references/checklist.md", "Check contrast")
         self.write("package.json", '{"config":{"hyperframes":"1"}}')
         self.write("package-lock.json", "{}")
         self.write("requirements.txt", "Pillow>=10")
@@ -94,7 +94,7 @@ class ReviewCacheTests(unittest.TestCase):
                  "videos/demo/script.md", "videos/demo/video.json", "engine/template.html",
                  "engine/check.py", "engine/review_cache.py", "engine/hf.mjs", "engine/common.py",
                  "engine/process_guard.py", "engine/compare.py", "package.json", "package-lock.json", "requirements.txt",
-                 ".claude/skills/review/references/checklist.md"]
+                 ".agents/skills/review/references/checklist.md"]
         for name in paths:
             with self.subTest(name=name):
                 p = self.root / name

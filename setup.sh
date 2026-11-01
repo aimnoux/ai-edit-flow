@@ -14,25 +14,25 @@ if [ -n "${VIRTUAL_ENV:-}" ]; then
   done
 else
   for c in python3 python; do
-    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then PY="$c"; break; fi
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info < (3, 14) else 1)' 2>/dev/null; then PY="$c"; break; fi
   done
 fi
 
 echo "Tools:"
 command -v git >/dev/null 2>&1 && ok git || miss git "install git"
-if [ -n "$PY" ] && "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+if [ -n "$PY" ] && "$PY" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info < (3, 14) else 1)' 2>/dev/null; then
   ok "Python $("$PY" -c 'import platform; print(platform.python_version())')"
 else
-  miss python "Python 3.10+ is required; check the activated environment, if any"
+  miss python "Python 3.11-3.13 is required; check the activated environment, if any"
 fi
 command -v ffmpeg >/dev/null 2>&1 && ok ffmpeg || miss ffmpeg "macOS: brew install ffmpeg; Linux: apt install ffmpeg; Windows: winget install ffmpeg"
 command -v ffprobe >/dev/null 2>&1 && ok ffprobe || miss ffprobe "install the complete ffmpeg package and add it to PATH"
 if command -v node >/dev/null 2>&1; then
-  NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
-  [ "$NODE_MAJOR" -ge 22 ] 2>/dev/null && ok "node $(node -v)" || miss "node $(node -v)" "Node.js 22+ is required (nodejs.org)"
+  node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22 || (a===22 && b>=12) ? 0 : 1)' && ok "node $(node -v)" || miss "node $(node -v)" "Node.js 22.12+ is required (nodejs.org)"
 else
-  miss node "Node.js 22+ (nodejs.org)"
+  miss node "Node.js 22.12+ (nodejs.org)"
 fi
+command -v npm >/dev/null 2>&1 && ok npm || miss npm "comes with Node.js"
 command -v npx >/dev/null 2>&1 && ok npx || miss npx "comes with Node.js"
 if [ "$MISSING" != 0 ]; then
   echo "Setup stopped. Install the missing tools, then run bash setup.sh again."
@@ -49,8 +49,8 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
     if [ -x "$c" ]; then PY="$c"; break; fi
   done
 fi
-if [ -z "$PY" ] || ! "$PY" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix and sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-  miss "virtual environment" "use a Python 3.10+ venv; dependencies are never installed globally"
+if [ -z "$PY" ] || ! "$PY" -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix and (3, 11) <= sys.version_info < (3, 14) else 1)' 2>/dev/null; then
+  miss "virtual environment" "use a Python 3.11-3.13 venv; dependencies are never installed globally"
   exit 1
 fi
 case "$PY" in
@@ -68,6 +68,17 @@ else
   exit 1
 fi
 
+echo "Locked JavaScript dependencies:"
+if ! npm ci --ignore-scripts --no-audit --no-fund; then
+  miss "npm ci" "check network/package-lock.json and retry"
+  exit 1
+fi
+if ! "$PY" engine/sync_skills.py --check; then exit 1; fi
+if ! "$PY" engine/common.py vendor; then
+  miss "GSAP" "check network access to the pinned library and retry"
+  exit 1
+fi
+
 echo "Config:"
 if [ -f .env ]; then
   ok .env
@@ -75,7 +86,7 @@ else
   cp .env.example .env || exit 1
   ok ".env created - add ELEVENLABS_API_KEY for speech services"
 fi
-[ ! -f style/visual.md ] || ok "style/ (say 'set up my style' in Claude Code)"
+[ ! -f style/visual.md ] || ok "style/ (say 'set up my style' in Codex or Claude Code)"
 
 echo "Isolated rendering browser:"
 # The wrapper downloads a dedicated headless browser; it never selects personal Chrome.
@@ -91,4 +102,4 @@ fi
 ok "dedicated browser ready"
 echo "Done. Activate the selected virtual environment before running engine scripts."
 echo "Default: source .venv/bin/activate (Windows Git Bash: source .venv/Scripts/activate)."
-echo "Open this folder in Claude Code and say what you want to make."
+echo "Open this folder in Codex or Claude Code and say what you want to make."

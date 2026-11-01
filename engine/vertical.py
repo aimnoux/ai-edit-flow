@@ -29,7 +29,7 @@ from build import composition, estimate_audio, load_audio, scene_stub, trim, wor
 from common import BUILD, CFG, FPS, HERE, HF, RENDERS, SCENES, SR, norm, sounds, sync_style  # noqa: E402
 from shots import shots  # noqa: E402
 from tts_elevenlabs import parse_blocks, strip_triggers  # noqa: E402
-from voice import find_said, paragraphs, tts_dir, written  # noqa: E402
+from voice import cached_paragraph, find_said, paragraphs, tts_dir, written  # noqa: E402
 
 ENDING = {"yt": "8", "ig": "9", "tt": "9"}
 LEAD, GAP_PARA, GAP_BLOCK, GAP_END, TAIL = 0.12, 0.28, 0.38, 0.45, 1.8   # TAIL: the ending's button holds after the last word
@@ -129,7 +129,8 @@ def cmd_build(reading, roll, plat, *rest):
         if estimate:
             audio, words, said = estimate_audio(p)
         else:
-            meta = json.loads((tts / f"{name}.json").read_text(encoding="utf-8"))
+            source = dict(p, block=p.get("src", p["block"]))
+            meta = cached_paragraph(reading, source, allp)
             audio, off = trim(load_audio(tts / f"{name}.mp3"))
             words = snap_onsets(words_from(meta["alignment"], off), audio)
             said = meta["spoken"]
@@ -255,7 +256,7 @@ def cmd_render(cid, *flags):
         import os
         log = BUILD / project / f"render-{cid}.log"
         with open(log, "w") as lf:
-            r = subprocess.run(HF + ["render", "-c", f"{cid}.html", "-o", str(vid), "--fps", str(FPS), "--quiet",
+            r = subprocess.run([sys.executable, str(HERE / "render.py"), cid, str(vid), "--fps", str(FPS), "--quiet",
                                      *[f for f in flags if f == "--resume"]],
                                cwd=HERE, stdout=lf, stderr=subprocess.STDOUT, env={**os.environ, "HF_SEGMENTED_CAPTURE": "true"})
         if r.returncode:

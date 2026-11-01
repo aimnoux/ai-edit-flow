@@ -5,7 +5,8 @@
     "_": "ElevenLabs voice for engine/voice.py: voice_id from `python3 engine/tts_elevenlabs.py --list-voices` or `--clone`. say: how to pronounce words the model reads badly; the text in the frame stays as written.",
     "voice_id": "",
     "model_id": "eleven_v3",
-    "say": {}
+    "say": {},
+    "settings": {}
   },
   "channel": {
     "_": "Shown in the ending of vertical videos (subscribe / like button). avatar: a file in style/assets/, written as assets/avatar.png; empty draws the first letter of the name.",

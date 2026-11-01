@@ -3,6 +3,7 @@
 
   python3 engine/common.py chrome     # prints the Chrome binary the scripts will use
   python3 engine/common.py hf         # prints the pinned HyperFrames version
+  python3 engine/common.py vendor     # fetches the pinned GSAP library once (setup)
 
 Browser tools use only a dedicated Chrome Headless Shell, never the person's desktop browser.
 """
@@ -123,8 +124,16 @@ def run_chrome(*extra, timeout=180):
 
 def run_hf(*args, timeout=None):
     """Allow the CLI wrapper to stop its owned browser before enforcing a Python timeout."""
-    p = subprocess.Popen([*HF, *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    opts = {"start_new_session": True} if os.name != "nt" else {
+        "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    p = subprocess.Popen([*HF, *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **opts)
+    guard = None
     try:
+        if os.name != "nt":
+            # Closing the runner's pipe kills its wrapper; that wrapper's guardian then reaps Chrome.
+            guard = subprocess.Popen([sys.executable, str(HERE / "process_guard.py"), str(p.pid)],
+                                     stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
         stdout, stderr = p.communicate(timeout=timeout)
         return subprocess.CompletedProcess(p.args, p.returncode, stdout, stderr)
     finally:
@@ -135,6 +144,14 @@ def run_hf(*args, timeout=None):
             except subprocess.TimeoutExpired:
                 p.kill()
                 p.communicate()
+        if os.name != "nt":
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if guard:
+            guard.stdin.close()
+            guard.wait(timeout=10)
 
 
 def sounds():
@@ -216,6 +233,6 @@ def project_dir(kind, project):
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "chrome"
     try:
-        print(chrome() if what == "chrome" else hf_version())
+        print(chrome() if what == "chrome" else ensure_vendor() if what == "vendor" else hf_version())
     except RuntimeError as exc:
         sys.exit(str(exc))

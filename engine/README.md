@@ -8,7 +8,7 @@ After `bash setup.sh`, activate `.venv` (`source .venv/bin/activate`, or
 `source .venv/Scripts/activate` in Windows Git Bash). If setup used an already active virtual
 environment, keep that one active. Run scripts from the repository root with
 `python engine/<script>.py`; HyperFrames through
-`node engine/hf.mjs <command>` (the version is pinned in `package.json`). Preview: `.claude/launch.json`,
+`node engine/hf.mjs <command>` (the version is pinned in `package.json`). Preview in Claude Code: `.claude/launch.json`,
 `engine` (port 8790), or `python engine/serve.py`.
 
 | File | What it does |
@@ -27,6 +27,7 @@ environment, keep that one active. Run scripts from the repository root with
 | `verify.py` | One-command runtime/layout/review and optional final-file checks, with concise reports |
 | `mix.py`, `mix_piece.py` | Mix: voice -16 LUFS, effects at cues from `style/sound/`, music with ducking, final -14 LUFS |
 | `compare.py` | Before/after as one video: `stack`, `grid`, `seq`, `chapter`, `mix` |
+| `render.py` | One composition through a stable isolated index project and the browser wrapper |
 | `render.sh` | Full render of a horizontal video: chapters -> mix -> final MP4 and SRT |
 | `serve.py` | Preview server without caching |
 | `hf.mjs` | Pinned HyperFrames CLI, isolated headless-shell and daemon cleanup |
@@ -158,3 +159,37 @@ to review a changed stretch; a full-composition review still needs its own curre
 
 Review artifacts, manifests and logs stay in ignored `engine/build/`. Repeated unchanged verification
 avoids capture and AI review work; actual model token savings depend on the task and session.
+
+## Voice cache integrity
+
+`voice.py` keys audio by the exact synthesis request: full voice ID, model, language (when sent),
+settings from `style/config.json -> voice.settings`, pronounced text, neighbouring context and
+output format. Indexed `<block>-<paragraph>` files remain compatible with the builders; reusable
+requests also live under `cache/<sha256>`. Script insertions can reuse unchanged requests even when
+paragraph indices shift. A partial batch selection keeps the full script context.
+
+Audio hashes and complete finite character alignment are checked on every hit and before a builder
+uses voice. A fully cached run needs no API key. Legacy text-only metadata cannot prove its request
+and is regenerated once; budget for that before authorizing a paid run. Changed text can invalidate
+its immediate neighbours too. Writes are atomic; `paragraphs.json` advances only after a successful
+run. An interrupted run keeps completed content-addressed requests for the next attempt.
+
+## Reproducible setup and portable adapters
+
+Supported Python: 3.11–3.13 (SciPy's pinned version needs 3.11+). `requirements.txt` pins all Python
+runtime dependencies; `npm ci --ignore-scripts` installs the integrity-locked Node graph. The wrapper
+uses `npx --no-install` so it never silently downloads a different dependency graph at render time.
+Every HyperFrames command has a 1800-second deadline; override `AEF_HF_TIMEOUT_SECONDS` with a
+positive number up to 86400 for a deliberate long render. Timeout exits 124 and cleans the owned group.
+
+`python engine/sync_skills.py --check` verifies the generated Claude adapter against `.agents/skills/`.
+`python engine/contracts.py --json` emits schema-1 deterministic local contract probes.
+`python engine/demo.py` builds the existing vertical example with synthetic word-tone audio and
+renders one 10 fps draft with one worker. `--prepare-only` skips browser rendering. It never calls a
+speech/model API; output stays in ignored `engine/build/` and `engine/renders/demo/`.
+
+Render entry points stage the selected composition as `index.html` under ignored
+`engine/build/render-projects/<id>/proj/`, with local libraries/assets. This also handles upstream
+render phases that require a project index even with an explicit composition flag, preserves resume
+paths and leaves unrelated preview indexes alone. Use `python engine/render.py <id> <out.mp4>` for
+a single composition; horizontal and vertical render commands use it automatically.

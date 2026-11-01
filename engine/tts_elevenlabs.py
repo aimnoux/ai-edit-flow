@@ -101,8 +101,8 @@ def check_response(r, what):
         sys.exit(f"{what}: {r.status_code} {r.text[:300]}")
 
 
-def synthesize(key, voice, model, text, previous=None, nxt=None, settings=None):
-    """One paragraph with character timestamps. previous/nxt give the model the neighbours for intonation."""
+def synthesis_request(voice, model, text, previous=None, nxt=None, settings=None):
+    """The exact non-secret request, shared with the content-addressed audio cache."""
     body = {"text": text, "model_id": model}
     if not model.startswith("eleven_multilingual"):
         body["language_code"] = LANG
@@ -112,11 +112,17 @@ def synthesize(key, voice, model, text, previous=None, nxt=None, settings=None):
         body["next_text"] = nxt
     if settings:
         body["voice_settings"] = settings
-    r = post(f"{API}/text-to-speech/{voice}/with-timestamps", headers={"xi-api-key": key}, json=body,
-             params={"output_format": "mp3_44100_128"})
+    return {"voice": voice, "body": body, "params": {"output_format": "mp3_44100_128"}}
+
+
+def synthesize(key, voice, model, text, previous=None, nxt=None, settings=None):
+    """One paragraph with character timestamps. previous/nxt give the model the neighbours for intonation."""
+    request = synthesis_request(voice, model, text, previous, nxt, settings)
+    r = post(f"{API}/text-to-speech/{voice}/with-timestamps", headers={"xi-api-key": key},
+             json=request["body"], params=request["params"])
     check_response(r, "text-to-speech")
     data = r.json()
-    return base64.b64decode(data["audio_base64"]), data["alignment"]
+    return base64.b64decode(data["audio_base64"], validate=True), data["alignment"]
 
 
 def list_voices(key):

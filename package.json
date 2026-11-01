@@ -7,6 +7,12 @@
   },
   "scripts": {
     "preview": "node engine/hf.mjs preview engine",
-    "render": "node engine/hf.mjs render"
+    "render": "python3 engine/render.py"
+  },
+  "dependencies": {
+    "hyperframes": "0.8.196"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

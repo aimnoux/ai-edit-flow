@@ -6,7 +6,8 @@
 
 Each paragraph is one request with the neighbouring paragraphs as context (previous_text / next_text),
 so pauses between paragraphs are placed by build.py and word timing is exact. Finished paragraphs are
-not regenerated: a repeated run costs no credits. A paragraph whose text changed is re-voiced.
+not regenerated when their full request is unchanged: cached runs need no API key.
+Changed text, neighbours, voice, model or settings revoice the affected requests.
 
 Writes next to the script, in tts/<script name>-<voice>-<model>/ (not in git):
   <block>-<paragraph>.mp3 + .json   audio and character timing ("spoken" is the text that was sent)
@@ -15,17 +16,22 @@ Voice, model and the pronunciation map come from style/config.json ("voice"). `s
 word to how it should be read ("ML": "em-el"); subtitles and the words scenes see stay as written.
 """
 import json
+import hashlib
+import math
+import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import CFG  # noqa: E402
-from tts_elevenlabs import api_key, parse_blocks, strip_triggers, synthesize  # noqa: E402
+from tts_elevenlabs import api_key, parse_blocks, strip_triggers, synthesize, synthesis_request  # noqa: E402
 
 VOICE_CFG = CFG.get("voice") or {}
 VOICE = VOICE_CFG.get("voice_id") or ""
 MODEL = VOICE_CFG.get("model_id") or "eleven_v3"
+SETTINGS = {k: v for k, v in (VOICE_CFG.get("settings") or {}).items() if k != "_"}
 SAY = {k: v for k, v in (VOICE_CFG.get("say") or {}).items() if k != "_"}
 _SAY_RE = re.compile("|".join(rf"(?<![A-Za-z0-9]){re.escape(a)}(?![A-Za-z0-9])" for a in sorted(SAY, key=len, reverse=True))) if SAY else None
 SLATE = re.compile(r"\.0$")   # N.0 blocks are slates for the cut, never voiced
@@ -101,6 +107,85 @@ def is_ending(block):
     return block.split(".")[1] in ("8", "9")
 
 
+def request_for(paras, i):
+    """Use the complete script so selecting a batch subset cannot alter its context."""
+    p = paras[i]
+    roll = p["block"].split(".")[0]
+    same = lambda j: (0 <= j < len(paras) and paras[j]["block"].split(".")[0] == roll
+                      and not is_ending(paras[j]["block"]))
+    prev = nxt = None
+    if is_ending(p["block"]):
+        body = [q for q in paras[:i] if q["block"].split(".")[0] == roll and not is_ending(q["block"])]
+        prev = spoken(body[-1]["text"]) if body else None
+    else:
+        prev = spoken(paras[i - 1]["text"]) if same(i - 1) else None
+        nxt = spoken(paras[i + 1]["text"]) if same(i + 1) else None
+    return synthesis_request(VOICE, MODEL, spoken(p["text"]), prev, nxt, SETTINGS)
+
+
+def request_key(request):
+    return hashlib.sha256(json.dumps(request, ensure_ascii=False, sort_keys=True,
+                                    separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def valid_alignment(meta):
+    try:
+        a = meta["alignment"]
+        chars, starts, ends = (a[k] for k in ("characters", "character_start_times_seconds", "character_end_times_seconds"))
+        return (isinstance(chars, list) and isinstance(starts, list) and isinstance(ends, list)
+                and bool(chars) and all(isinstance(c, str) and len(c) == 1 for c in chars)
+                and "".join(chars) == meta["spoken"] and len(chars) == len(starts) == len(ends)
+                and all(type(v) in (int, float) and math.isfinite(v) and v >= 0 for v in starts + ends)
+                and all(a <= b for a, b in zip(starts, ends))
+                and all(a <= b for a, b in zip(starts, starts[1:]))
+                and all(a <= b for a, b in zip(ends, ends[1:])))
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def read_cache(mp3, js, request):
+    """Legacy text-only caches cannot prove voice, settings or context; regenerate them once."""
+    try:
+        audio = mp3.read_bytes()
+        meta = json.loads(js.read_text(encoding="utf-8"))
+        if (not audio or not isinstance(meta, dict) or meta.get("request") != request
+                or meta.get("cache_key") != request_key(request)
+                or meta.get("audio_sha256") != hashlib.sha256(audio).hexdigest()
+                or meta.get("spoken") != request["body"]["text"] or not valid_alignment(meta)):
+            return None
+        return meta
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
+def atomic_bytes(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix="." + path.name + ".")
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(data)
+        os.replace(name, path)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+
+
+def write_meta(path, meta):
+    atomic_bytes(path, json.dumps(meta, ensure_ascii=False, indent=1, allow_nan=False).encode())
+
+
+def cached_paragraph(script, p, paras=None):
+    """Consumers must reject stale indexed audio rather than build it into a new script."""
+    paras = paragraphs(script) if paras is None else paras
+    i = next(i for i, q in enumerate(paras) if q["block"] == p["block"] and q["para"] == p["para"])
+    name = f"{p['block']}-{p['para']}"
+    directory = tts_dir(script)
+    meta = read_cache(directory / f"{name}.mp3", directory / f"{name}.json", request_for(paras, i))
+    if meta is None:
+        raise ValueError(f"Missing or stale voice {name}; run python engine/voice.py {script}")
+    return meta
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -109,32 +194,47 @@ def main():
     script = Path(sys.argv[1])
     only = set(sys.argv[2].split(",")) if len(sys.argv) > 2 else set()
     paras = paragraphs(script)
-    if only:
-        paras = [p for p in paras if p["block"].split(".")[0] in only]
-    key = api_key()
+    selected = [(i, p) for i, p in enumerate(paras) if not only or p["block"].split(".")[0] in only]
+    key = None  # Fully cached runs need no credentials or network.
     out = tts_dir(script)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "paragraphs.json").write_text(json.dumps(paras, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"{len(paras)} paragraphs, {sum(len(p['text']) for p in paras)} characters -> {out}")
-    for i, p in enumerate(paras):
+    print(f"{len(selected)} paragraphs, {sum(len(p['text']) for _, p in selected)} characters -> {out}")
+    # Snapshot every valid indexed entry before an insertion can overwrite its old index.
+    for js in out.glob("*.json"):
+        try:
+            candidate = json.loads(js.read_text(encoding="utf-8"))
+            request = candidate.get("request") if isinstance(candidate, dict) else None
+            meta = read_cache(js.with_suffix(".mp3"), js, request) if isinstance(request, dict) else None
+            if meta:
+                cache = out / "cache" / request_key(request)
+                atomic_bytes(cache.with_suffix(".mp3"), js.with_suffix(".mp3").read_bytes())
+                write_meta(cache.with_suffix(".json"), meta)
+        except (OSError, ValueError, TypeError, KeyError):
+            continue
+    for i, p in selected:
         name = f"{p['block']}-{p['para']}"
         mp3, js = out / f"{name}.mp3", out / f"{name}.json"
-        old = json.loads(js.read_text(encoding="utf-8")) if js.exists() else {}
-        if mp3.exists() and old.get("spoken") == spoken(p["text"]):
+        request = request_for(paras, i)
+        cache = out / "cache" / request_key(request)
+        old = read_cache(cache.with_suffix(".mp3"), cache.with_suffix(".json"), request)
+        if old:
+            atomic_bytes(mp3, cache.with_suffix(".mp3").read_bytes())
+            write_meta(js, old)
             continue
-        roll = p["block"].split(".")[0]
-        same = lambda j: 0 <= j < len(paras) and paras[j]["block"].split(".")[0] == roll and not is_ending(paras[j]["block"])
-        prev = nxt = None
-        if is_ending(p["block"]):   # an ending follows the body of its video: context is the body's last paragraph
-            body = [q for q in paras[:i] if q["block"].split(".")[0] == roll and not is_ending(q["block"])]
-            prev = spoken(body[-1]["text"]) if body else None
-        else:
-            prev = spoken(paras[i - 1]["text"]) if same(i - 1) else None
-            nxt = spoken(paras[i + 1]["text"]) if same(i + 1) else None
-        audio, alignment = synthesize(key, VOICE, MODEL, spoken(p["text"]), prev, nxt)
-        mp3.write_bytes(audio)
-        js.write_text(json.dumps({"spoken": spoken(p["text"]), "alignment": alignment}, ensure_ascii=False), encoding="utf-8")
+        key = key or api_key()
+        body = request["body"]
+        audio, alignment = synthesize(key, VOICE, MODEL, body["text"], body.get("previous_text"),
+                                      body.get("next_text"), body.get("voice_settings"))
+        meta = {"spoken": body["text"], "alignment": alignment, "request": request,
+                "cache_key": request_key(request), "audio_sha256": hashlib.sha256(audio).hexdigest()}
+        if not audio or not valid_alignment(meta):
+            raise ValueError(f"{name}: empty audio or invalid character timing from API")
+        atomic_bytes(cache.with_suffix(".mp3"), audio)
+        write_meta(cache.with_suffix(".json"), meta)
+        atomic_bytes(mp3, audio)
+        write_meta(js, meta)
         print(f"  {name} ok")
+    write_meta(out / "paragraphs.json", paras)
 
 
 if __name__ == "__main__":

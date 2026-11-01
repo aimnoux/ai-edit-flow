@@ -14,7 +14,7 @@ something to look at or hear, and nothing goes to the person before the frame re
    is no style yet: say so and run the `style` skill first. Never invent a look to fill the gap.
 2. Read `style/config.json` (language, voice, channel).
 3. Plan the video in 5-8 lines: format, source of the voice (recording or clone), chapters or the
-   batch, what the person has to give you (a recording, a text, a cleaned voice). Get the "ok".
+   batch, what the person has to give you (a recording, a text, a cleaned voice). Continue when this scope is already authorized; otherwise get the "ok".
 
 ## Horizontal video, live voice (the main path)
 
@@ -43,7 +43,7 @@ platforms. Details: `vertical`.
 
 One step, one "ok": a render before the cut is approved is wasted work. A contact sheet or short
 draft makes the next decision concrete. Shared timing, style, review and delivery rules are in the
-automatically loaded `CLAUDE.md`.
+automatically loaded `AGENTS.md`.
 
 ## What is ready
 

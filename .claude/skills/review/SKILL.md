@@ -5,14 +5,16 @@ description: Review changed timing or layout before showing frames, or investiga
 
 # Frame review
 
-1. Run the shared verification command from `CLAUDE.md` for the changed composition or range. It
+1. Run the shared verification command from `AGENTS.md` for the changed composition or range. It
    prepares measurements and cached beat, seam and phone sheets. Use the emitted artifact paths.
    A machine pass is not visual approval: a pending verdict still needs a reviewer. Reuse an existing
    conclusion only when the command reports it current for the same inputs and scope.
-2. When review is needed, start a **fresh subagent** (Agent tool, no history). Give it only
+2. When review is needed, start a **fresh subagent** (the available agent tool, no history). Give it only
    [references/checklist.md](references/checklist.md), `REVIEW-INPUT.md`, the sheets, this stretch's
    script and the style layer of `style/visual.md`. The builder does not load the full checklist.
    The reviewer judges what a viewer sees; give it no code or builder explanation.
+   If independent agents are unavailable, prepare the evidence and report review pending. Do not
+   invent a verdict or let the builder approve its own frames.
 3. Save its complete answer, including the `Fingerprint:` copied from `REVIEW-INPUT.md` and an
    explicit `Verdict: PASS` or `Verdict: FAIL`, as `reviewer.md`, then
    attach it to the current fingerprint:

@@ -43,8 +43,10 @@ python3 engine/voice.py vertical/<batch>.md 3,4          # only videos 3 and 4 o
 ```
 
 - Each paragraph is one request with its neighbours as context, so intonation flows and word timing
-  is exact. Paragraphs are cached: a second run voices only what changed. To re-voice a line, change
-  its text (or delete its mp3) and run again.
+  is exact. Paragraphs are cached by the full request (voice/model/settings, text and neighbours), with
+  audio hashes and validated timestamps. Changed context revoices affected neighbours too; unchanged
+  runs need no key. To force one request, delete its indexed mp3/JSON and matching `cache/<hash>` pair.
+  Legacy text-only caches regenerate once; account for that before authorizing a paid run.
 - Pauses: a paragraph in the script is a pause; punctuation and an ellipsis inside a paragraph make
   short ones. Break tags are not reliable, don't use them.
 - **Pronunciation map** `style/config.json` → `voice.say`: `"ML": "em el"`, `"GPT": "gee pee tee"`.

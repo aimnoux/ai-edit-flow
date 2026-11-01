@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import BUILD, FPS, HERE, SCENES, SR, VIDEOS, duration, norm, slot, sounds, sync_style  # noqa: E402
 from pad_chapters import head_of, tail_of, video_cfg  # noqa: E402
 from tts_elevenlabs import chapter_titles, parse_blocks, strip_triggers  # noqa: E402
-from voice import find_said, paragraphs as tts_paragraphs, tts_dir, written  # noqa: E402
+from voice import cached_paragraph, find_said, paragraphs as tts_paragraphs, tts_dir, written  # noqa: E402
 
 GAP_PARA = 0.6      # pause between paragraphs of one block (cloned voice)
 GAP_BLOCK = 0.8     # pause between blocks
@@ -171,10 +171,10 @@ def from_paragraphs(slug, paras, script, audio_of):
     return entries, voice[: int(t * SR)], t, chapters
 
 
-def tts_audio(tts):
+def tts_audio(tts, script_path, paras):
     def f(p):
         name = f"{p['block']}-{p['para']}"
-        meta = json.loads((tts / f"{name}.json").read_text(encoding="utf-8"))
+        meta = cached_paragraph(script_path, p, paras)
         audio, off = trim(load_audio(tts / f"{name}.mp3"))
         return audio, words_from(meta["alignment"], off), meta["spoken"]
     return f
@@ -260,7 +260,7 @@ def main():
         entries, voice, total, chapters = from_cut(a.slug, Path(a.cut), script)
     else:
         paras = tts_paragraphs(vid / "script.md")
-        audio_of = tts_audio(tts_dir(vid / "script.md")) if a.tts else estimate_audio
+        audio_of = tts_audio(tts_dir(vid / "script.md"), vid / "script.md", paras) if a.tts else estimate_audio
         entries, voice, total, chapters = from_paragraphs(a.slug, paras, script, audio_of)
 
     wavfile.write(out / "voice.wav", SR, voice)

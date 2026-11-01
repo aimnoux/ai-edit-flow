@@ -107,7 +107,7 @@ while True:
         env = {**os.environ, "CHROME_PATH": str(browser), "FAKE_READY": str(self.marker)}
         return self.launch([sys.executable, str(script)], env)
 
-    def hf_launcher(self):
+    def hf_launcher(self, timeout=None):
         browser = self.executable("chrome-headless-shell", "raise SystemExit('must never launch')")
         self.sleeping_process("npx")
         # Supply a working Python for the wrapper's resolver and pipe guardian.
@@ -116,6 +116,8 @@ while True:
         (venv / "bin/python3").symlink_to(sys.executable)
         env = {**os.environ, "CHROME_PATH": str(browser), "FAKE_READY": str(self.marker),
                "VIRTUAL_ENV": str(venv), "PATH": str(self.folder) + os.pathsep + os.environ.get("PATH", "")}
+        if timeout is not None:
+            env["AEF_HF_TIMEOUT_SECONDS"] = str(timeout)
         return self.launch([NODE, str(ROOT / "engine/hf.mjs"), "check", "fake-project"], env)
 
     def test_browser_parent_sigterm_reaps_owned_group(self):
@@ -147,6 +149,30 @@ while True:
         launcher.terminate()
         _, stderr = launcher.communicate(timeout=5)
         self.assertEqual(launcher.returncode, 128 + signal.SIGTERM, stderr)
+        self.assert_processes_dead(pids)
+
+    @unittest.skipUnless(NODE, "Node required for the fake npx wrapper test")
+    def test_hf_deadline_reaps_owned_group_and_fails(self):
+        launcher = self.hf_launcher(timeout=0.5)
+        pids = self.ready(launcher)
+        _, stderr = launcher.communicate(timeout=8)
+        self.assertEqual(launcher.returncode, 124, stderr)
+        self.assertIn("timed out", stderr)
+        self.assert_processes_dead(pids)
+
+    @unittest.skipUnless(NODE, "Node required for the fake npx wrapper test")
+    def test_python_hf_runner_sigkill_reaps_wrapper_and_owned_children(self):
+        browser = self.executable("chrome-headless-shell", "raise SystemExit('must never launch')")
+        self.sleeping_process("npx")
+        script = self.folder / "hf_parent.py"
+        script.write_text(f"import sys\nsys.path.insert(0, {str(ROOT / 'engine')!r})\n"
+                          "import common\ncommon.run_hf('check', 'fake-project', timeout=30)\n")
+        env = {**os.environ, "CHROME_PATH": str(browser), "FAKE_READY": str(self.marker),
+               "PATH": str(self.folder) + os.pathsep + os.environ.get("PATH", "")}
+        launcher = self.launch([sys.executable, str(script)], env)
+        pids = self.ready(launcher)
+        launcher.kill()
+        launcher.wait(timeout=5)
         self.assert_processes_dead(pids)
 
 

@@ -109,7 +109,7 @@ def fingerprint(cid, chapter=None, video=None):
     for name in ("lib", "template.html", "template-v.html", "hyperframes.json"):
         add(here / name, scan=False)
     add(root / "style", scan=False)
-    add(root / ".claude" / "skills" / "review")
+    add(root / ".agents" / "skills" / "review")
     add(root / "package.json")
     add(root / "requirements.txt")
     for lock in ("package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock"):
