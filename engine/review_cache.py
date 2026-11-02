@@ -187,7 +187,7 @@ def fingerprint(cid, chapter=None, video=None):
         # kit.svg(..., {href: "..."}) and other DOM-attribute object literals.
         for ref in re.findall(r"(?:[\"'`]?(?:href|src|poster)[\"'`]?)\s*:\s*[\"'`]([^\"'`]+)[\"'`]", text):
             reference(ref, here, path)
-        if re.search(r"[\"'`]?(?:href|src|poster)[\"'`]?\s*:\s*(?![\s\"'`])", text):
+        if path.suffix.lower() != ".css" and re.search(r"[\"'`]?(?:href|src|poster)[\"'`]?\s*:\s*(?![\s\"'`])", text):
             reasons.append(f"unresolved object resource attribute: {path}")
         if re.search(r"[,{]\s*\[[^]\n]+\]\s*:", text):
             reasons.append(f"unresolved computed object attribute: {path}")

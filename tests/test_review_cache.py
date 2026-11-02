@@ -80,6 +80,21 @@ class ReviewCacheTests(unittest.TestCase):
         self.assertTrue(Path(second["input"]).is_absolute())
         self.assertTrue(all(Path(p).is_absolute() for p in second["sheets"]))
 
+    def test_local_font_face_can_be_approved_and_font_changes_invalidate_review(self):
+        css = self.write("engine/lib/tokens.css", '@font-face {font-family: "Pilot"; src: url("fonts/pilot.woff2");}')
+        font = self.write("engine/lib/fonts/pilot.woff2", "first font bytes")
+        composition = self.here / "demo-ch1.html"
+        composition.write_text(composition.read_text() + '<link rel="stylesheet" href="lib/tokens.css">')
+        first = cache.fingerprint("demo-ch1")
+        self.assertTrue(first["reusable"], first["reasons"])
+        self.run_review()
+        approved = self.run_review(record_review=self.reviewer())
+        self.assertEqual(approved["conclusion"]["verdict"], "pass")
+        font.write_text("changed font bytes")
+        self.assertNotEqual(first["fingerprint"], cache.fingerprint("demo-ch1")["fingerprint"])
+        changed = self.run_review()
+        self.assertEqual(changed["conclusion"]["status"], "pending")
+
     def test_root_relative_resource_does_not_assume_the_project_directory(self):
         path = self.here / "demo-ch1.html"
         path.write_text(path.read_text() + '<img src="/assets/image.png">')
