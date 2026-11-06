@@ -1,4 +1,4 @@
-# ai-edit-flow
+# maxouni-editflow
 
 **English** · [Русский](README.ru.md)
 
@@ -29,8 +29,8 @@ Not a video editor and not a plugin for one. Not a model, not a service, no acco
 You need: Codex or [Claude Code](https://claude.com/claude-code), git, Python 3.11–3.13, Node.js 22.12+ and ffmpeg (including ffprobe). Rendering uses a dedicated `chrome-headless-shell`, downloaded by setup; your personal Google Chrome is not used. An [ElevenLabs](https://elevenlabs.io) key is optional: it powers speech-to-text for the cut, voice cloning and music.
 
 ```bash
-git clone https://github.com/aimnoux/ai-edit-flow.git
-cd ai-edit-flow
+git clone https://github.com/aimnoux/maxouni-editflow.git
+cd maxouni-editflow
 bash setup.sh
 source .venv/bin/activate
 ```

@@ -1,4 +1,4 @@
-# ai-edit-flow
+# maxouni-editflow
 
 [English](README.md) · **Русский**
 
@@ -29,8 +29,8 @@
 Нужны: Codex или [Claude Code](https://claude.com/claude-code), git, Python 3.11–3.13, Node.js 22.12+ и ffmpeg (включая ffprobe). Для рендера setup скачивает отдельный `chrome-headless-shell`; личный Google Chrome не используется. Ключ [ElevenLabs](https://elevenlabs.io) необязателен: на нём работают распознавание речи для нарезки, клон голоса и музыка.
 
 ```bash
-git clone https://github.com/aimnoux/ai-edit-flow.git
-cd ai-edit-flow
+git clone https://github.com/aimnoux/maxouni-editflow.git
+cd maxouni-editflow
 bash setup.sh
 source .venv/bin/activate
 ```

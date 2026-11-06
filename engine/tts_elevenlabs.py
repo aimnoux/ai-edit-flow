@@ -160,7 +160,7 @@ def list_voices(key):
 def clone(key, sample, name):
     with open(sample, "rb") as f:
         r = requests.post(f"{API}/voices/add", headers={"xi-api-key": key},
-                          data={"name": name, "description": "Instant clone made by ai-edit-flow"},
+                          data={"name": name, "description": "Instant clone made by maxouni-editflow"},
                           files={"files": (Path(sample).name, f)}, timeout=300)
     if not r.ok:
         sys.exit(f"Clone failed: {r.status_code} {r.text[:300]}")
