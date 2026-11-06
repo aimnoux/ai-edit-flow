@@ -39,6 +39,8 @@ Text in `vertical/<batch>.md` (format: `vertical/example.md`) → voice (clone, 
 `cut.py` on the batch text) → `vertical.py build` for one platform → review → render → the other
 platforms. Details: `vertical`.
 
+A sketch with two voices or a 3D scene: same steps, voices in `voice`, drawing and render in `3d`. Needs a video card.
+
 ## Step boundaries
 
 One step, one "ok": a render before the cut is approved is wasted work. A contact sheet or short

@@ -9,8 +9,9 @@ A starter kit for editing video with Codex or Claude Code. You record, the agent
 A skeleton of an editing pipeline that an agent runs end to end. It ships as a set of skills and scripts for Codex and Claude Code, from a raw recording to a finished video:
 
 - **Cut** — removing bad takes, pauses and filler from the recording
-- **Voice** — cleanup and, if you want, a clone of your voice for retakes
+- **Voice** — cleanup and, if you want, a clone of your voice for retakes; two voices with intonation tags for a sketch
 - **Graphics** — titles, charts and transitions written as code, not clicked together
+- **3D and shaders** — three.js scenes and pure WebGL worlds with motion blur, depth of field and soft shadows (needs a video card)
 - **Review** — a second agent checks sampled frames and scene transitions against a checklist before you see it
 - **Sound** — music, effects and the mix
 - **Render** — the final file, ready to upload
@@ -51,7 +52,7 @@ Speech lives under `### N.M` headings. Separate paragraphs with a blank line; wr
 ## What is inside
 
 ```
-.agents/skills/    canonical skills: edit, cut, voice, graphics, vertical, review, sound, render, style
+.agents/skills/    canonical skills: edit, cut, voice, graphics, 3d, vertical, review, sound, render, style
 engine/            scripts (Python, Node) and a small library for compositions, no style in it
 style/             your style: templates to fill
 videos/<slug>/     a horizontal video: script, settings; recordings and voice are not in git
@@ -61,6 +62,22 @@ CLAUDE.md          short Claude entry point; .claude/skills/ is a generated comp
 ```
 
 Graphics are rendered with [HyperFrames](https://hyperframes.heygen.com) (HTML + GSAP compositions), pinned to one version in `package.json`.
+
+## 3D and shaders
+
+| Task | Skill | Draws with | Render |
+|---|---|---|---|
+| Things, characters, rooms; a 9:16 sketch with two voices | `3d`, `voice`, `vertical` | three.js r181 (vendored, MIT) | `engine/render3d.mjs` |
+| A world written as a fragment shader, built on the beats of a track | `3d` | WebGL2 | `engine/render3d.mjs` |
+
+**A video card is required.** macOS with Metal is verified; Windows and Linux have not been tested. `node engine/render3d.mjs --doctor`
+says what the browser gets, and the render stops with a clear message when there is no GPU. Examples, no paid calls:
+
+```
+python engine/vertical.py build vertical/sketch.md 1 yt --estimate
+node engine/render3d.mjs sketch-s1-yt --draft
+node engine/render3d.mjs scenes/shader-example/index.html --draft
+```
 
 ## Free local demo
 

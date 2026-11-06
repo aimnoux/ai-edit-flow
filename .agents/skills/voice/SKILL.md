@@ -7,7 +7,8 @@ description: Clean recorded speech, clone a voice, voice scripts, fix pronunciat
 
 Two sources of voice, never mixed inside one video: a **live recording** (cut with `cut`, cleaned by
 the person) or a **clone** (ElevenLabs, voiced paragraph by paragraph with word timing). A course,
-a trailer, a batch of verticals: each is one source throughout.
+a trailer, a batch of verticals: each is one source throughout. A dialogue of two voices is always
+voiced (below), never cut from a recording.
 
 ## Cleaning a live recording
 
@@ -53,6 +54,27 @@ python3 engine/voice.py vertical/<batch>.md 3,4          # only videos 3 and 4 o
   The text in the frame and the subtitles stay as written; only the voice reads the replacement.
   Abbreviations, product names and anything the model reads in the wrong language go here.
 - Speed stays at 1.0; if the person wants faster, cut pauses, don't stretch the voice.
+
+## Two voices: a sketch
+
+A line starts with a speaker, `{tag}` right after the name is the intonation (format: `vertical/sketch.md`):
+
+```
+boss: {annoyed} Who spent the whole [budget] overnight?
+
+dev: {whispers} Another [subagent].
+```
+
+- Speakers live in `style/config.json` → `voice.speakers`: `"boss": { "voice_id": "...", "settings": {} }`. An empty
+  `voice_id` means the main `voice.voice_id`; `settings` replace the main ones for this speaker. Add or rename
+  speakers there **before** voicing. Pick the second voice with `--list-voices`; the run warns if two speakers share one.
+- `{tag}` goes to the model as the audio tag `[tag]` and is cut from the text, the word timing and the captions. Tags
+  work on `eleven_v3` only, other models read them out, so the run stops. One or more tags, only at the start of a line:
+  anywhere else, or after an unknown speaker, the run stops before any paid request. Split a line in two for a change of mood.
+- Cache by voice: the key holds voice, tag and text. A new voice for one speaker revoices that speaker only; a new tag
+  revoices that line only. Neighbours are context without tags.
+- `who` reaches the scene in `TM.blocks`; `speakerWords(TM.blocks, "boss")` feeds `mouth()` for a 3D character (`3d`).
+- Lines are not levelled against each other: check a shout next to a whisper by ear before the mix.
 
 ## When ElevenLabs fails
 

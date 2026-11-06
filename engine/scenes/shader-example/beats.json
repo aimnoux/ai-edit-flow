@@ -1,0 +1,15 @@
+{
+  "track": null,
+  "note": "Placeholder marks. For a real track: python engine/beats.py track.mp3 engine/scenes/<slug>/beats.json",
+  "marks": [
+    { "t": 0.5, "name": "hit" },
+    { "t": 1.25, "name": "hit" },
+    { "t": 2.0, "name": "hit" },
+    { "t": 2.75, "name": "hit" },
+    { "t": 3.5, "name": "drop" },
+    { "t": 3.5, "name": "hit" },
+    { "t": 4.0, "name": "hit" },
+    { "t": 4.5, "name": "hit" },
+    { "t": 5.0, "name": "hit" }
+  ]
+}

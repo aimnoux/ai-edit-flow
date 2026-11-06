@@ -6,7 +6,12 @@
     "voice_id": "",
     "model_id": "eleven_v3",
     "say": {},
-    "settings": {}
+    "settings": {},
+    "speakers": {
+      "_": "Voices of a dialogue. A script line `boss: {angry} Text` goes to this speaker. voice_id: another voice; empty means voice_id above. settings: optional, replace the ones above for this speaker. Rename or add speakers freely.",
+      "boss": { "voice_id": "" },
+      "dev": { "voice_id": "" }
+    }
   },
   "channel": {
     "_": "Shown in the ending of vertical videos (subscribe / like button). avatar: a file in style/assets/, written as assets/avatar.png; empty draws the first letter of the name.",

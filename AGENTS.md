@@ -29,8 +29,9 @@ generated compatibility copy. Run `python engine/sync_skills.py` after changes a
 |---|---|
 | New video, where to start, order of steps, what is ready | `edit` |
 | Cut takes and pauses out of a recording | `cut` |
-| Clean the voice, clone it, re-voice a line | `voice` |
+| Clean the voice, clone it, re-voice a line, two voices in a sketch | `voice` |
 | Titles, charts, interfaces, transitions in code | `graphics` |
+| 3D things and characters, shader worlds, cinematic render (needs a video card) | `3d` |
 | Vertical video 9:16 (Shorts, Reels, TikTok) | `vertical` |
 | Check frames before showing | `review` |
 | Music, sound effects, mix, loudness | `sound` |
@@ -44,7 +45,8 @@ style/             the person's style: visual.md, tokens.css, config.json, sound
 videos/<slug>/     a horizontal video: script.md, video.json, drops.json; cut/, tts/ are not in git
 vertical/          vertical videos: one .md per batch, tts/ is not in git
 engine/            scripts, lib/, templates; scenes/<project>/, build/, renders/ (last two not in git)
-engine/scenes/     your code per project: ch<N>.js for a horizontal video, s<N>.js for a vertical one
+engine/scenes/     your code per project: ch<N>.js for a horizontal video, s<N>.js for a vertical one,
+                   s<N>.mjs for its 3D layer, <slug>/index.html for a shader scene
 .agents/skills/    the skills above
 package.json       the single HyperFrames version pin; scripts run it through engine/hf.mjs
 ```
@@ -52,7 +54,8 @@ package.json       the single HyperFrames version pin; scripts run it through en
 ## Rules that hold everywhere
 
 - Graphics are code: HyperFrames compositions, GSAP timelines, deterministic (no `Date.now()`,
-  no `Math.random()`, no network). Fonts and libraries are local.
+  no `Math.random()`, no network). Fonts and libraries are local. 3D and shaders are the same pages
+  with WebGL; they render through `engine/render3d.mjs`, which needs a video card.
 - Timing comes from the voice: word timestamps, `W("1.2", "phrase")` in scenes. Never guess times.
 - Activate the setup Python environment before commands (`source .venv/bin/activate`; Windows Git
   Bash: `source .venv/Scripts/activate`).

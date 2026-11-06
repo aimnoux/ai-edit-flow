@@ -15,4 +15,5 @@ engine/build/
 engine/renders/
 engine/*.html
 !engine/template*.html
-engine/lib/vendor/
+engine/lib/vendor/*
+!engine/lib/vendor/three/

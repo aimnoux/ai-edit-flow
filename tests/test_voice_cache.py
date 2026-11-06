@@ -18,6 +18,90 @@ def alignment(text):
             "character_end_times_seconds": [(i + 1) / 10 for i in range(len(text))]}
 
 
+class DialogueTests(unittest.TestCase):
+    """Two speakers with tags: voice per line, tags in the request only, one cache per voice."""
+    SPEAKERS = {"boss": {"voice_id": "second-voice-id", "settings": {"stability": 0.3}}, "dev": {}}
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.script = Path(self.temp.name) / "skit.md"
+        self.script.write_text("### 1.1\nboss: {annoyed} {slowly} Who spent the [budget]?\ndev: {nervous} Not me.\n\ndev: Ask him.\n### 1.8\ndev: Tap like.\n")
+        self.calls = []
+        def synthesize(key, vid, model, text, previous, nxt, settings):
+            self.calls.append((vid, text, settings))
+            request = api.synthesis_request(vid, model, text, previous, nxt, settings)
+            return json.dumps(request, sort_keys=True).encode(), alignment(text)
+        for guard in (patch.object(voice, "VOICE", "clone-voice-id"), patch.object(voice, "MODEL", "eleven_v3"),
+                      patch.object(voice, "SETTINGS", {}), patch.object(voice, "SAY", {}), patch.object(voice, "_SAY_RE", None),
+                      patch.object(voice, "SPEAKERS", self.SPEAKERS), patch.object(api, "SPEAKERS", self.SPEAKERS),
+                      patch.object(voice, "api_key", return_value="fixture-key"), patch.object(voice, "synthesize", side_effect=synthesize)):
+            guard.start()
+            self.addCleanup(guard.stop)
+
+    def run_voice(self):
+        with patch.object(sys, "argv", ["voice.py", str(self.script)]):
+            voice.main()
+
+    def test_lines_are_split_by_speaker_without_a_blank_line(self):
+        got = [(p["who"], p["tags"], p["text"], p["triggers"]) for p in voice.paragraphs(self.script)]
+        self.assertEqual(got, [("boss", ["annoyed", "slowly"], "Who spent the budget?", ["budget"]), ("dev", ["nervous"], "Not me.", []),
+                               ("dev", [], "Ask him.", []), ("dev", [], "Tap like.", [])])
+
+    def test_each_line_goes_to_its_voice_with_tags_and_settings(self):
+        self.run_voice()
+        self.assertEqual(self.calls[0], ("second-voice-id", "[annoyed] [slowly] Who spent the budget?", {"stability": 0.3}))
+        self.assertEqual(self.calls[1], ("clone-voice-id", "[nervous] Not me.", None))
+
+    def test_tags_are_cut_from_spoken_text_and_timing(self):
+        self.run_voice()
+        paras = voice.paragraphs(self.script)
+        meta = voice.cached_paragraph(self.script, paras[0], paras)
+        self.assertEqual(meta["spoken"], "Who spent the budget?")
+        self.assertEqual("".join(meta["alignment"]["characters"]), "Who spent the budget?")
+        words = build.words_from(meta["alignment"], 0)
+        self.assertEqual(words[0]["w"], "Who")
+        self.assertEqual(words[0]["s"], len("[annoyed] [slowly] ") / 10)
+
+    def test_changing_one_voice_revoices_only_that_speaker(self):
+        self.run_voice()
+        self.calls.clear()
+        self.run_voice()
+        self.assertEqual(self.calls, [])
+        other = {**self.SPEAKERS, "boss": {"voice_id": "third-voice-id", "settings": {"stability": 0.3}}}
+        with patch.object(voice, "SPEAKERS", other):
+            self.run_voice()
+        self.assertEqual([c[0] for c in self.calls], ["third-voice-id"])
+
+    def test_changing_a_tag_revoices_only_that_line(self):
+        self.run_voice()
+        self.calls.clear()
+        self.script.write_text(self.script.read_text().replace("{nervous}", "{calm}"))
+        self.run_voice()
+        self.assertEqual([c[1] for c in self.calls], ["[calm] Not me."])
+
+    def test_mistakes_stop_before_any_paid_request(self):
+        for text in ("### 1.1\nmanager: {angry} Text\n", "### 1.1\nboss: Text {angry} more\n", "### 1.1\nboss: Text\n\nmanager: Text\n"):
+            self.script.write_text(text)
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, "speaker"):
+                self.run_voice()
+        self.assertEqual(self.calls, [])
+
+    def test_tags_need_a_model_that_performs_them(self):
+        with patch.object(voice, "MODEL", "eleven_multilingual_v2"), self.assertRaisesRegex(ValueError, "eleven_v3"):
+            self.run_voice()
+        self.assertEqual(self.calls, [])
+
+    def test_tag_outside_the_timing_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "start of the timing"):
+            voice.cut_prefix(alignment("Text"), "[calm] ")
+
+    def test_plain_narration_is_untouched(self):
+        self.script.write_text("### 1.1\nWarning: this line has a colon.\n")
+        self.assertEqual(voice.paragraphs(self.script)[0]["text"], "Warning: this line has a colon.")
+        self.assertIsNone(voice.paragraphs(self.script)[0]["who"])
+
+
 class VoiceCacheTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

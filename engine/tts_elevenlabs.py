@@ -22,6 +22,9 @@ from common import CFG, LANG  # noqa: E402
 
 API = "https://api.elevenlabs.io/v1"
 DEFAULT_MODEL = (CFG.get("voice") or {}).get("model_id") or "eleven_v3"
+SPEAKERS = {k: v or {} for k, v in ((CFG.get("voice") or {}).get("speakers") or {}).items() if k != "_"}
+LINE = re.compile(r"^([^\W\d_][\w-]*):\s+")      # "boss: " at the start of a paragraph
+TAGS = re.compile(r"^((?:\{[^{}]+\}\s*)+)")      # "{angry} " right after the speaker
 
 
 def api_key():
@@ -58,9 +61,30 @@ def parse_blocks(script_text):
         if not line or line.startswith((">", "|", "---")):
             flush()
         elif current is not None:
+            if is_speaker(line):
+                flush()  # a change of speaker is a paragraph even without a blank line
             lines.append(line)
     flush()
     return blocks
+
+
+def is_speaker(line, speakers=None):
+    m = LINE.match(line)
+    return bool(m) and m.group(1) in (SPEAKERS if speakers is None else speakers)
+
+
+def split_line(raw, speakers=None):
+    """'boss: {angry} Text' -> ('boss', ['angry'], 'Text'). Speakers are the names in voice.speakers.
+    A {tag} anywhere else would be read aloud and shown in captions, so it stops the run."""
+    who = LINE.match(raw).group(1) if is_speaker(raw, speakers) else None
+    body = LINE.sub("", raw, count=1) if who else raw
+    m = TAGS.match(body)
+    tags = re.findall(r"\{([^{}]+)\}", m.group(1)) if m else []
+    text = body[m.end():] if m else body
+    if "{" in text or "}" in text:
+        raise ValueError(f"Unknown speaker or misplaced {{tag}}: {raw[:70]!r}. A speaker needs an entry in "
+                         "style/config.json -> voice.speakers; a tag goes right after the speaker.")
+    return who, tags, text
 
 
 def chapter_titles(script_text):

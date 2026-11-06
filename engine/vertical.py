@@ -8,6 +8,7 @@
   python3 engine/vertical.py silent example 7 yt 8.0 [--no-loop]        # no voice at all: scene s7.js, 8.0 s, loops by default
   python3 engine/vertical.py shots example-s1-yt 0.5 3 8 ...            # contact sheet without rendering
   python3 engine/vertical.py render example-s1-yt [--music track.mp3] [--mix-only]   # HyperFrames render -> strobe check -> mix
+                                                                                     # a 3D scene (s<N>.mjs): render3d.mjs -> mix
 
 Platforms: yt (YouTube Shorts), ig (Instagram Reels), tt (TikTok). The platform changes the ending
 (block N.8 for yt, N.9 for ig/tt, N.9 falls back to N.8) and the button lib/vertical.js draws; nothing else.
@@ -149,7 +150,7 @@ def cmd_build(reading, roll, plat, *rest):
         voice.append((t, audio))
         dur = len(audio) / SR
         blocks.setdefault(p["block"], []).append({
-            "block": p["block"], "text": p["text"], "s": round(t, 3), "e": round(t + dur, 3),
+            "block": p["block"], "who": p.get("who"), "text": p["text"], "s": round(t, 3), "e": round(t + dur, 3),
             "words": [{"w": x["w"], "n": norm(x["w"]), "s": round(x["s"] + t, 3), "e": round(x["e"] + t, 3)} for x in words],
             "triggers": trig})
         t += dur
@@ -208,7 +209,7 @@ def build_from_cut(project, roll, plat, seq, cut_dir, loop):
             else:
                 print(f"  warning: trigger [{tw}] in {src} not found in speech")
         blocks.setdefault(p["block"], []).append({
-            "block": p["block"], "text": p["text"], "s": round(t, 3), "e": round(t + dur, 3),
+            "block": p["block"], "who": p.get("who"), "text": p["text"], "s": round(t, 3), "e": round(t + dur, 3),
             "words": [{"w": x["w"], "n": norm(x["w"]), "s": x["s"], "e": x["e"]} for x in ws], "triggers": trig})
         voice.append((t, part))
         t += dur
@@ -244,15 +245,23 @@ def strobe(video):
 
 
 def cmd_render(cid, *flags):
-    """HyperFrames render (segmented, resumable) -> strobe check -> mix with voice, cues and optional music."""
-    project = cid.split("-s")[0]
+    """HyperFrames render (segmented, resumable) -> strobe check -> mix with voice, cues and optional music.
+    A composition with a 3D module renders on the video card through render3d.mjs instead."""
+    project = cid.rsplit("-s", 1)[0]
     out_dir = RENDERS / project
     out_dir.mkdir(parents=True, exist_ok=True)
     vid = out_dir / f"{cid}-video.mp4"
     music = next((flags[i + 1] for i, a in enumerate(flags) if a == "--music"), "-")
     if music != "-":
         music = str(Path(music).resolve())  # mixing runs from engine/, the caller supplies a root-relative path
-    if "--mix-only" not in flags:
+    html = (HERE / f"{cid}.html").read_text(encoding="utf-8")
+    if "--mix-only" not in flags and 'type="module"' in html:
+        log = BUILD / project / f"render-{cid}.log"
+        with open(log, "w") as lf:
+            r = subprocess.run(["node", str(HERE / "render3d.mjs"), cid, f"--out={vid}"], cwd=HERE, stdout=lf, stderr=subprocess.STDOUT)
+        if r.returncode:
+            sys.exit(f"3D render failed, see {log} (the same command continues from the last frame)")
+    elif "--mix-only" not in flags:
         import os
         log = BUILD / project / f"render-{cid}.log"
         with open(log, "w") as lf:
@@ -264,7 +273,7 @@ def cmd_render(cid, *flags):
         bad = strobe(vid)
         if bad:
             sys.exit(f"frames from another moment at {bad} s: re-render (python3 engine/vertical.py render {cid}) and check again")
-    loop = '"loop": true' in (HERE / f"{cid}.html").read_text(encoding="utf-8")
+    loop = '"loop": true' in html
     out = out_dir / f"{cid}.mp4"
     subprocess.run([sys.executable, str(HERE / "mix_piece.py"), cid, str(vid), str(BUILD / project / f"{cid}-voice.wav"),
                     music, str(out), *(["--loop"] if loop else [])], cwd=HERE, check=True)

@@ -157,6 +157,8 @@ def fingerprint(cid, chapter=None, video=None):
         ref = ref.strip()
         if not ref or ref.startswith(("#", "data:", "about:")):
             return
+        if ref == "three" or ref.startswith("three/"):
+            return  # the import map points into lib/vendor/three, hashed with lib/
         if "${" in ref:
             if ref == "lib/${ch.avatar}" and known_avatar(origin):
                 return

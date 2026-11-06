@@ -14,6 +14,11 @@ Writes next to the script, in tts/<script name>-<voice>-<model>/ (not in git):
 
 Voice, model and the pronunciation map come from style/config.json ("voice"). `say` maps a written
 word to how it should be read ("ML": "em-el"); subtitles and the words scenes see stay as written.
+
+Dialogue: a paragraph `boss: {angry} Text` is voiced by voice.speakers.boss (voice_id and settings; an
+empty voice_id means voice.voice_id). {angry} goes to the model as the audio tag [angry] and is cut from
+the text, the timing and the subtitles. The cache key holds the voice and the tag, so changing one
+speaker's voice revoices only that speaker's lines.
 """
 import json
 import hashlib
@@ -26,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import CFG  # noqa: E402
-from tts_elevenlabs import api_key, parse_blocks, strip_triggers, synthesize, synthesis_request  # noqa: E402
+from tts_elevenlabs import LINE, SPEAKERS, api_key, parse_blocks, split_line, strip_triggers, synthesize, synthesis_request  # noqa: E402
 
 VOICE_CFG = CFG.get("voice") or {}
 VOICE = VOICE_CFG.get("voice_id") or ""
@@ -87,15 +92,45 @@ def find_said(said, word, start=0):
 
 
 def paragraphs(script_path):
-    """Paragraphs of a script: block, index, text, triggers. Slates (N.0) are skipped."""
+    """Paragraphs of a script: block, index, speaker, tags, text, triggers. Slates (N.0) are skipped."""
     out = []
     for bid, paras in parse_blocks(Path(script_path).read_text(encoding="utf-8")).items():
         if SLATE.search(bid):
             continue
         for k, raw in enumerate(paras):
-            text, trig = strip_triggers(raw)
-            out.append({"block": bid, "para": k, "text": text, "triggers": [w for w, _ in trig], "offs": [o for _, o in trig]})
+            who, tags, line = split_line(raw, SPEAKERS)
+            text, trig = strip_triggers(line)
+            out.append({"block": bid, "para": k, "text": text, "triggers": [w for w, _ in trig], "offs": [o for _, o in trig],
+                        "who": who, "tags": tags})
+    # Inside a dialogue a line with an unknown name would be read aloud together with the name.
+    dialogue = {p["block"].split(".")[0] for p in out if p["who"]}
+    for p in out:
+        if p["block"].split(".")[0] in dialogue and not p["who"] and LINE.match(p["text"]):
+            raise ValueError(f"Unknown speaker in {p['block']}: {p['text'][:70]!r}. Add it to style/config.json -> voice.speakers.")
     return out
+
+
+def voice_of(p):
+    return (SPEAKERS.get(p.get("who")) or {}).get("voice_id") or VOICE
+
+
+def settings_of(p):
+    own = (SPEAKERS.get(p.get("who")) or {}).get("settings") or {}
+    return {k: v for k, v in own.items() if k != "_"} or SETTINGS
+
+
+def tag_prefix(p):
+    """Audio tags in front of the spoken text. Only eleven_v3 performs them; other models read them out."""
+    if p.get("tags") and not MODEL.startswith("eleven_v3"):
+        raise ValueError(f"Tags in {p['block']} need the eleven_v3 model, not {MODEL}")
+    return "".join(f"[{t}] " for t in p.get("tags") or [])
+
+
+def cut_prefix(alignment, prefix):
+    """The tag comes back as the first characters of the timing and has no sound: words start with the speech."""
+    if "".join(alignment["characters"][:len(prefix)]) != prefix:
+        raise ValueError(f"Tag {prefix!r} is not at the start of the timing")
+    return {k: v[len(prefix):] for k, v in alignment.items()}
 
 
 def tts_dir(script_path):
@@ -120,7 +155,7 @@ def request_for(paras, i):
     else:
         prev = spoken(paras[i - 1]["text"]) if same(i - 1) else None
         nxt = spoken(paras[i + 1]["text"]) if same(i + 1) else None
-    return synthesis_request(VOICE, MODEL, spoken(p["text"]), prev, nxt, SETTINGS)
+    return synthesis_request(voice_of(p), MODEL, tag_prefix(p) + spoken(p["text"]), prev, nxt, settings_of(p))
 
 
 def request_key(request):
@@ -151,7 +186,7 @@ def read_cache(mp3, js, request):
         if (not audio or not isinstance(meta, dict) or meta.get("request") != request
                 or meta.get("cache_key") != request_key(request)
                 or meta.get("audio_sha256") != hashlib.sha256(audio).hexdigest()
-                or meta.get("spoken") != request["body"]["text"] or not valid_alignment(meta)):
+                or meta.get("prefix", "") + meta["spoken"] != request["body"]["text"] or not valid_alignment(meta)):
             return None
         return meta
     except (OSError, ValueError, TypeError, KeyError):
@@ -189,12 +224,15 @@ def cached_paragraph(script, p, paras=None):
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
-    if not VOICE:
-        sys.exit("No voice: put voice_id into style/config.json (python3 engine/tts_elevenlabs.py --list-voices or --clone)")
     script = Path(sys.argv[1])
     only = set(sys.argv[2].split(",")) if len(sys.argv) > 2 else set()
     paras = paragraphs(script)
     selected = [(i, p) for i, p in enumerate(paras) if not only or p["block"].split(".")[0] in only]
+    if not all(voice_of(p) for _, p in selected):
+        sys.exit("No voice: put voice_id into style/config.json (python3 engine/tts_elevenlabs.py --list-voices or --clone)")
+    voices = {p["who"]: voice_of(p) for _, p in selected if p["who"]}
+    if len(set(voices.values())) < len(voices):
+        print(f"  warning: speakers share one voice: {', '.join(sorted(voices))}; see voice.speakers in style/config.json")
     key = None  # Fully cached runs need no credentials or network.
     out = tts_dir(script)
     out.mkdir(parents=True, exist_ok=True)
@@ -223,9 +261,10 @@ def main():
             continue
         key = key or api_key()
         body = request["body"]
-        audio, alignment = synthesize(key, VOICE, MODEL, body["text"], body.get("previous_text"),
+        audio, alignment = synthesize(key, request["voice"], MODEL, body["text"], body.get("previous_text"),
                                       body.get("next_text"), body.get("voice_settings"))
-        meta = {"spoken": body["text"], "alignment": alignment, "request": request,
+        prefix = tag_prefix(p)
+        meta = {"spoken": body["text"][len(prefix):], "alignment": cut_prefix(alignment, prefix), "prefix": prefix, "request": request,
                 "cache_key": request_key(request), "audio_sha256": hashlib.sha256(audio).hexdigest()}
         if not audio or not valid_alignment(meta):
             raise ValueError(f"{name}: empty audio or invalid character timing from API")

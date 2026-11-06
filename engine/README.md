@@ -14,7 +14,7 @@ environment, keep that one active. Run scripts from the repository root with
 | File | What it does |
 |---|---|
 | `common.py` | Paths, `style/config.json`, dedicated headless-shell lookup and lifecycle, GSAP fetch, style sync into `lib/` |
-| `tts_elevenlabs.py` | ElevenLabs API, script parsing (`parse_blocks`, `strip_triggers`), `--list-voices`, `--clone` |
+| `tts_elevenlabs.py` | ElevenLabs API, script parsing (`parse_blocks`, `strip_triggers`, `split_line`), `--list-voices`, `--clone` |
 | `stt.py` | Speech-to-text with word timestamps (ElevenLabs Scribe) -> JSON for `cut.py` |
 | `cut.py` | Rough cut of a recording by the script: last take, no fillers, pauses shortened -> `words.json` and `voice.wav` (audio-only) / `rough.mp4` (video) |
 | `pad_chapters.py` | Silence between chapters of a live-voice cut for titles and outros (`video.json`) |
@@ -26,6 +26,8 @@ environment, keep that one active. Run scripts from the repository root with
 | `review.py`, `review_cache.py` | Cached sheets, integrity manifests and explicitly recorded reviewer conclusions |
 | `verify.py` | One-command runtime/layout/review and optional final-file checks, with concise reports |
 | `mix.py`, `mix_piece.py` | Mix: voice -16 LUFS, effects at cues from `style/sound/`, music with ducking, final -14 LUFS |
+| `render3d.mjs` | 3D and shader render on the video card: `--draft`, `--from/--to`, `--still`, `--spp`, `--audio`, `--doctor`; frames in `build/frames3d/` |
+| `beats.py` | Hits, tempo and the drop of a track -> `beats.json`, with a marks sheet and a click track to check |
 | `compare.py` | Before/after as one video: `stack`, `grid`, `seq`, `chapter`, `mix` |
 | `render.py` | One composition through a stable isolated index project and the browser wrapper |
 | `render.sh` | Full render of a horizontal video: chapters -> mix -> final MP4 and SRT |
@@ -34,6 +36,10 @@ environment, keep that one active. Run scripts from the repository root with
 | `lib/kit.js` | Timing by words (`W`, `WE`, `B`, `P`, `TR`), scenes, `rich`/`reveal`/`follow`, `glow`, lists, chapter title, `typeText`, camera |
 | `lib/vertical.js` | 9:16: `slam`, `vtext`, `chip`, `vcard`, `chatWindow`, `docSheet`, `stamp`, `memeFrame`, captions, platform ending |
 | `lib/finish.js` | Timeline registration, cue filter, scene bounds |
+| `lib/three3d.mjs` | three.js scene for a mixed frame: `stage`, `color`, `spline`, `aim`, `pin`, `drive`, subframes in `?cine` |
+| `lib/shader.mjs` | One-fragment-shader scene: `shaderScene`, `window.seek(t)`, subframes, shutter, ACES |
+| `lib/motion.mjs` | Pure helpers: `mouth`, `talking`, `speakerWords`, `markTimes`, `pulse`, `halton`, easing |
+| `lib/vendor/three/` | Three.js r181 with two addons, MIT, tracked in git; GSAP next to it is downloaded by setup |
 | `lib/style.css`, `lib/vertical.css` | Structure only; looks come from `lib/tokens.css` (copied from `style/`) |
 | `template.html`, `template-v.html` | Layer skeleton: world (style slot) -> stage -> hud -> overlay (style slot) |
 
@@ -105,6 +111,27 @@ For live vertical voice, run `stt.py` and `cut.py` against the batch text, then 
 The cut directory may contain `voice.wav` (audio-only) or `rough.mp4` (video), plus `words.json`;
 slates `N.0` are excluded and only this video's story and selected platform ending are assembled.
 
+## 3D and shaders
+
+A video card is required: macOS with Metal is verified, Windows and Linux are not tested. Skill: `3d`.
+
+```
+node engine/render3d.mjs --doctor                                  # what WebGL the rendering browser gets
+python engine/vertical.py build vertical/sketch.md 1 yt --estimate # two characters, no voice needed
+node engine/render3d.mjs sketch-s1-yt --still=2,8                  # single frames
+node engine/render3d.mjs sketch-s1-yt --draft                      # half size, 4 subframes
+python engine/vertical.py render sketch-s1-yt                      # final: 16 subframes, then the mix
+node engine/render3d.mjs scenes/shader-example/index.html --from=1 --to=3
+```
+
+A scene `scenes/<batch>/s<N>.mjs` next to `s<N>.js` joins the composition by itself with an import map for
+`lib/vendor/three/`. Its canvas lies in `#world`: stage, captions and overlay stay flat HTML above it. A shader scene is
+`scenes/<slug>/index.html`, copied from `scenes/shader-example/`. Both follow one contract: `#root` holds `data-width`,
+`data-height`, `data-fps`, `data-duration`; the page sets `window.ready`; `?cine` turns subframes on and `&draft` halves the size.
+`render3d.mjs` uses the same dedicated headless shell through `hf.mjs browser path`, serves `engine/` itself on a free local
+port and needs no preview server. It keeps frames, so a failed run continues. Output is
+`engine/renders/<project>/<name>-video.mp4`, or `<name>-draft.mp4`, or a stretch file while other frames are missing.
+
 ## Offline regression checks
 
 With the Python environment active, run from the repository root:
@@ -163,8 +190,8 @@ avoids capture and AI review work; actual model token savings depend on the task
 ## Voice cache integrity
 
 `voice.py` keys audio by the exact synthesis request: full voice ID, model, language (when sent),
-settings from `style/config.json -> voice.settings`, pronounced text, neighbouring context and
-output format. Indexed `<block>-<paragraph>` files remain compatible with the builders; reusable
+settings from `style/config.json -> voice.settings` (or the speaker's own), pronounced text with its
+audio tags, neighbouring context and output format. Indexed `<block>-<paragraph>` files remain compatible with the builders; reusable
 requests also live under `cache/<sha256>`. Script insertions can reuse unchanged requests even when
 paragraph indices shift. A partial batch selection keeps the full script context.
 

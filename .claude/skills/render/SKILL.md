@@ -9,6 +9,8 @@ HyperFrames renders a composition frame by frame. Long renders run in the foregr
 in a file; never start a render in the
 background with `&` inside a command: it is cancelled when the parent exits.
 
+3D and shader scenes render on the video card through `engine/render3d.mjs`, not HyperFrames: see `3d`.
+
 ## Horizontal video
 
 ```

@@ -19,6 +19,9 @@ line, nothing after it. Triggers in [brackets] on the words where something happ
 Separate spoken paragraphs with a blank line. Wrapped source lines remain one paragraph; notes
 (`>`), tables and headings are excluded from speech.
 
+A sketch with two voices: lines start with a speaker and an optional `{tag}`, format in `vertical/sketch.md`, voices and
+tags in `voice`. Conflict in the first line, three rounds of escalation, the twist in the last two seconds, 25-40 s.
+
 Endings are one short line. Shorts may ask for a like or a subscription. Reels and TikTok treat
 requests to like, share, save or tag as engagement bait and show such videos less: there, follow or a
 plain closing line only.
@@ -71,6 +74,17 @@ chatWindow(sc, x, y, w, h, title).show(t).say("user" | "bot", text, t0, t1)
 docSheet(sc, x, y, w, [lines], t)  stamp(sc, "TEXT", x, y, t)
 memeFrame("one phrase on top")             a format without captions: the phrase carries it
 platformEnding()                           automatic from block N.8 / N.9; own look via window.END_CTA
+```
+
+## 3D in a vertical
+
+A module `engine/scenes/<batch>/s<N>.mjs` next to `s<N>.js` makes the frame mixed: 3D under the page, text and captions flat
+on top (`3d`). The same `build` and `verify`; `render` goes through the video card by itself. `--estimate` builds
+without any voice, the mouth moves on estimated word times. Example:
+
+```
+python engine/vertical.py build vertical/sketch.md 1 yt --estimate
+node engine/render3d.mjs sketch-s1-yt --draft
 ```
 
 ## Formats without voice

@@ -10,7 +10,8 @@
     "render": "python3 engine/render.py"
   },
   "dependencies": {
-    "hyperframes": "0.8.196"
+    "hyperframes": "0.8.196",
+    "puppeteer-core": "25.16.0"
   },
   "engines": {
     "node": ">=22.12.0"

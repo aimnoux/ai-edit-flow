@@ -217,9 +217,18 @@ def write_srt(entries, path, width=42):
     path.write_text("\n".join(out), encoding="utf-8")
 
 
+MODULE = ('<script type="importmap">{"imports": {"three": "./lib/vendor/three/three.module.js", '
+          '"three/addons/": "./lib/vendor/three/addons/"}}</script>\n'
+          '    <script type="module" src="%s"></script>')
+
+
 def composition(cid, dur, timing, scene_path, template="template.html", extra=""):
-    """A composition file from a template: timing, style slots, scene script."""
+    """A composition file from a template: timing, style slots, scene script. A 3D module s<N>.mjs next to the
+    scene joins by itself."""
     tpl = (HERE / template).read_text(encoding="utf-8")
+    module = Path(scene_path).with_suffix(".mjs")
+    if (HERE / module).exists():
+        extra += MODULE % module.as_posix()
     html = (tpl.replace("{{ID}}", cid).replace("{{DUR}}", f"{dur:.2f}")
                .replace("{{TIMING}}", json.dumps(timing, ensure_ascii=False))
                .replace("{{WORLD}}", slot("world" if template == "template.html" else "world-v"))
